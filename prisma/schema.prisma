@@ -29,8 +29,3 @@ model DailyLog {
               trainingType     String   // "Descanso", "Musculação", "Corrida", "Híbrido", "Livre"
                 createdAt        DateTime @default(now())
 }
-
-}
-}
-}
-}
