@@ -1,0 +1,75 @@
+# 📘 Documentação Técnica: Metabolic Tracker (v2.0)
+
+Esta documentação serve como o guia definitivo de arquitetura, regras de negócio e infraestrutura para desenvolvedores humanos e agentes autônomos de IA (como GitHub Copilot, Cursor, etc.) que assumirem a manutenção deste projeto.
+
+---
+
+## 🤖 DIRETIVAS CRÍTICAS PARA AGENTES DE IA (SYSTEM CONTEXT)
+**Para qualquer IA lendo este repositório antes de gerar código:**
+1. **NÃO ATUALIZE O PRISMA PARA A VERSÃO 6 OU 7.** O projeto está intencionalmente fixado na versão `^5.x`. O Vercel Postgres e nossa configuração de schema não suportam a sintaxe de `url` e `directUrl` das versões mais recentes do Prisma sem um `prisma.config.ts`. Mantenha a v5.
+2. **NÃO ALTERE O SCRIPT DE BUILD.** O script correto no `package.json` deve ser estritamente `"build": "prisma db push && next build"`. Como usamos o Vercel Postgres (Neon) serverless, as tabelas precisam ser sincronizadas a cada deploy.
+3. **MANTENHA A CHAVE PRIMÁRIA COMO STRING.** O campo `date` no modelo `DailyLog` é uma `String` (formato ISO `YYYY-MM-DD`). Não mude para `DateTime`. Isso previne bugs globais de fuso horário, garantindo que o dia registrado no celular seja o mesmo salvo no banco de dados.
+
+---
+
+## 🏗️ 1. Visão Geral da Arquitetura e Stack
+
+A aplicação é um rastreador metabólico Full-Stack desenhado para tolerar falhas (dados parciais/dias esquecidos) e calcular o Gasto Energético Total (TDEE) real e empírico do usuário.
+
+* **Front-end / Back-end:** Next.js 14+ (App Router).
+* **Banco de Dados:** Vercel Postgres (Engine: Neon Serverless PostgreSQL).
+* **ORM:** Prisma Client (v5.x).
+* **Gráficos:** Recharts (Renderização SVG responsiva no cliente).
+* **Estilização:** Tailwind CSS.
+* **Hospedagem:** Vercel (Ambiente Serverless).
+
+---
+
+## 🗄️ 2. Estrutura do Banco de Dados (Prisma Schema)
+
+O banco é projetado para aceitar lacunas de dados. Campos como `weight` e `caloriesConsumed` são opcionais (`Float?`, `Int?`).
+
+### Modelo `UserSettings` (Singleton)
+Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
+* `id`: Fixo como `"singleton"`.
+* `age`, `height`, `gender`, `activityLevel`: Usados para o cálculo heurístico (Mifflin-St Jeor).
+* `goal`: `"loss"`, `"maintenance"`, `"gain"`.
+* `weeklyRate`: Ritmo de progressão esperado (ex: `-0.5` kg).
+* `currentCalorieTarget`: Meta atual (atualizada dinamicamente pelo motor metabólico).
+
+### Modelo `DailyLog` (Série Temporal)
+* `date`: `String` (PK) no formato `YYYY-MM-DD`.
+* `weight`: `Float?` (Peso matinal).
+* `caloriesConsumed`: `Int?` (Ingestão).
+* `caloriesBurned`: `Int?` (Gasto em exercícios).
+* `trainingType`: `String` (Tags de esforço: "Descanso", "Musculação", "Corrida", "Híbrido", "Livre").
+
+---
+
+## 🧠 3. O Motor Metabólico (`lib/metabolicAlgo.ts`)
+
+A lógica central da aplicação resolve o problema das fórmulas de internet (que erram muito) usando os próprios dados do usuário. Opera em duas fases:
+
+### Fase 1: Cálculo Base (Heurística de Mifflin-St Jeor)
+Quando há **menos de 14 dias** de logs, a aplicação calcula o basal clínico:
+`TMB = (10 * Peso) + (6.25 * Altura) - (5 * Idade) + Constante` (onde Constante é +5 p/ Homem, -161 p/ Mulher).
+Aplica-se o fator de atividade e soma-se o déficit/superávit do objetivo (assumindo que 1kg corporais = 7700 kcal).
+
+### Fase 2: Cálculo Empírico Adaptativo
+Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algoritmo abandona a teoria e calcula a termodinâmica real:
+1. Extrai a média de peso isolada da Semana 1 e da Semana 2, ignorando dias sem pesagem (`null`).
+2. Calcula o delta real de massa: `Variação_KG = Média_Semana_2 - Média_Semana_1`.
+3. Descobre o impacto energético real diário: `Delta_Energia = (Variação_KG * 7700) / 7`.
+4. Define o **TDEE Real**: `(Calorias_Ingeridas_Média - Delta_Energia) + Calorias_Gastas_Média`.
+5. Recalcula a nova meta aplicando o objetivo do usuário em cima deste novo TDEE.
+6. Limita o resultado por segurança clínica (mínimo de 1200 kcal, máximo de 5000 kcal).
+
+---
+
+## 🚀 4. Variáveis de Ambiente e Conexão (Neon / Vercel)
+
+As variáveis abaixo são injetadas automaticamente pela Vercel no ambiente de produção. Para desenvolvimento local, devem constar no arquivo `.env`:
+
+```env
+POSTGRES_PRISMA_URL="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb?pgbouncer=true&connect_timeout=15"
+POSTGRES_URL_NON_POOLING="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb"
