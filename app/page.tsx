@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 interface Log {
   date: string;
@@ -28,6 +28,7 @@ export default function Home() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [insights, setInsights] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Form de Onboarding
   const [setupForm, setSetupForm] = useState({ age: '', height: '', weight: '', gender: 'M', activityLevel: '1.375', goal: 'loss', weeklyRate: '-0.5' });
@@ -73,6 +74,37 @@ export default function Home() {
     await fetchData();
   };
 
+  const resetLogForm = () => {
+    setLogForm({
+      date: getYesterdayString(),
+      weight: '',
+      caloriesConsumed: '',
+      caloriesBurned: '',
+      trainingType: 'Descanso',
+      sleepHours: '',
+      waterIntake: '',
+      stressLevel: '3',
+      mood: 'Regular',
+    });
+    setIsEditing(false);
+  };
+
+  const handleEditLog = (log: Log) => {
+    setLogForm({
+      date: log.date,
+      weight: log.weight?.toString() || '',
+      caloriesConsumed: log.caloriesConsumed?.toString() || '',
+      caloriesBurned: log.caloriesBurned?.toString() || '',
+      trainingType: log.trainingType,
+      sleepHours: log.sleepHours?.toString() || '',
+      waterIntake: log.waterIntake?.toString() || '',
+      stressLevel: log.stressLevel?.toString() || '3',
+      mood: log.mood || 'Regular',
+    });
+    setIsEditing(true);
+    setClientMessage({ type: 'info', text: `Modo de edição ativado para ${log.date}.` });
+  };
+
   const handleLogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -92,20 +124,54 @@ export default function Home() {
       body: JSON.stringify(logForm)
     });
 
-    setClientMessage({ type: 'success', text: 'Dados computados com sucesso! O algoritmo recalculou seu progresso.' });
-    setLogForm({
-      date: getYesterdayString(),
-      weight: '',
-      caloriesConsumed: '',
-      caloriesBurned: '',
-      trainingType: 'Descanso',
-      sleepHours: '',
-      waterIntake: '',
-      stressLevel: '3',
-      mood: 'Regular',
-    });
+    setClientMessage({ type: 'success', text: isEditing ? 'Registro atualizado com sucesso.' : 'Dados computados com sucesso! O algoritmo recalculou seu progresso.' });
+    resetLogForm();
     await fetchData();
   };
+
+  const recentLogs = [...logs].slice(0, 7);
+  const recentWeights = recentLogs.map((log) => log.weight).filter((w): w is number => w !== null);
+  const recentCalories = recentLogs.map((log) => log.caloriesConsumed).filter((c): c is number => c !== null);
+  const recentSleep = recentLogs.map((log) => log.sleepHours).filter((s): s is number => s !== null);
+  const recentWater = recentLogs.map((log) => log.waterIntake).filter((w): w is number => w !== null);
+  const recentStress = recentLogs.map((log) => log.stressLevel).filter((s): s is number => s !== null);
+
+  const average = (values: number[]) => values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  const alerts = [] as string[];
+
+  if (settings && recentCalories.length >= 3) {
+    const averageCalories = average(recentCalories);
+    if (averageCalories > settings.currentCalorieTarget + 150) {
+      alerts.push('A ingestão média está acima da meta. Revisite o planejamento das refeições.');
+    } else if (averageCalories < settings.currentCalorieTarget - 150) {
+      alerts.push('A ingestão média está abaixo do alvo. Revise a consistência e a recuperação.');
+    }
+  }
+
+  if (recentSleep.length >= 3) {
+    const averageSleep = average(recentSleep);
+    if (averageSleep < 7) {
+      alerts.push('O sono da semana está abaixo de 7 horas. Isso pode prejudicar a recuperação.');
+    }
+  }
+
+  if (recentWater.length >= 3) {
+    const averageWater = average(recentWater);
+    if (averageWater < 2000) {
+      alerts.push('A hidratação média está baixa. Um ajuste de água pode melhorar o desempenho.');
+    }
+  }
+
+  if (recentStress.length >= 3) {
+    const averageStress = average(recentStress);
+    if (averageStress >= 4) {
+      alerts.push('O estresse da semana está alto. Uma rotina mais leve pode ajudar.');
+    }
+  }
+
+  if (recentWeights.length === 0) {
+    alerts.push('Ainda não há pesos recentes para avaliar a tendência.');
+  }
 
   // Preparação de dados para gráficos com Média Móvel de Peso de 7 dias
   const chartData = [...logs].reverse().map((log, index, arr) => {
@@ -195,6 +261,24 @@ export default function Home() {
       </div>
       <section className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
         <h2 className="text-lg font-bold text-slate-200 mb-4">💡 Insights Automáticos</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <p className="text-xs uppercase text-slate-400">Média de calorias</p>
+            <p className="text-xl font-semibold text-emerald-400">{recentCalories.length > 0 ? `${Math.round(average(recentCalories))} kcal` : '—'}</p>
+          </div>
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <p className="text-xs uppercase text-slate-400">Sono médio</p>
+            <p className="text-xl font-semibold text-sky-400">{recentSleep.length > 0 ? `${average(recentSleep).toFixed(1)}h` : '—'}</p>
+          </div>
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <p className="text-xs uppercase text-slate-400">Água média</p>
+            <p className="text-xl font-semibold text-cyan-400">{recentWater.length > 0 ? `${Math.round(average(recentWater))} ml` : '—'}</p>
+          </div>
+          <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+            <p className="text-xs uppercase text-slate-400">Tendência de peso</p>
+            <p className="text-xl font-semibold text-amber-400">{recentWeights.length >= 2 ? `${(recentWeights[recentWeights.length - 1] - recentWeights[0]).toFixed(1)} kg` : '—'}</p>
+          </div>
+        </div>
         <div className="space-y-3">
           {insights.length > 0 ? (
             insights.map((insight, index) => (
@@ -214,6 +298,17 @@ export default function Home() {
           {clientMessage.text && (
             <div className={`p-3 rounded-lg text-sm mb-4 font-medium ${clientMessage.type === 'error' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
               {clientMessage.text}
+            </div>
+          )}
+
+          {alerts.length > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-sm font-semibold text-amber-300 mb-2">Alertas ativos</p>
+              <ul className="space-y-1 text-sm text-amber-100/90">
+                {alerts.map((alert, index) => (
+                  <li key={index}>• {alert}</li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -271,7 +366,10 @@ export default function Home() {
                 <option value="Ruim">Ruim</option>
               </select>
             </div>
-            <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg transition-colors shadow-lg">Salvar Dados</button>
+            <div className="flex gap-2">
+              <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg transition-colors shadow-lg">{isEditing ? 'Atualizar Registro' : 'Salvar Dados'}</button>
+              <button type="button" onClick={resetLogForm} className="px-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors">Novo</button>
+            </div>
           </form>
         </section>
 
@@ -287,6 +385,7 @@ export default function Home() {
                 <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke="#94a3b8" />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }} />
                 <Legend />
+                <ReferenceLine y={settings?.currentCalorieTarget} stroke="#f87171" strokeDasharray="3 3" label="Meta" />
                 <Line type="monotone" dataKey="Média Móvel" stroke="#60a5fa" strokeWidth={3} dot={false} connectNulls />
                 <Line type="linear" dataKey="Peso Real" stroke="#475569" strokeWidth={1} strokeDasharray="4 4" connectNulls dot={{ r: 3 }} />
               </LineChart>
@@ -303,6 +402,7 @@ export default function Home() {
                 <YAxis stroke="#94a3b8" />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }} />
                 <Legend />
+                <ReferenceLine y={settings?.currentCalorieTarget} stroke="#f87171" strokeDasharray="3 3" label="Meta" />
                 <Bar dataKey="Consumo Ingerido" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={40} name="Ingerido (kcal)" />
                 <Bar dataKey="Gasto Exercício" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={40} name="Gasto Treino (kcal)" />
                 <Line type="monotone" dataKey="Meta Diária" stroke="#f87171" strokeWidth={2} dot={false} name="Meta do App" />
@@ -342,15 +442,18 @@ export default function Home() {
                   <td className="p-3 text-white">{log.stressLevel ? log.stressLevel : <span className="text-slate-600">—</span>}</td>
                   <td className="p-3 text-white">{log.mood || <span className="text-slate-600">—</span>}</td>
                   <td className="p-3">
-                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                      log.trainingType === 'Híbrido' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                      log.trainingType === 'Musculação' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                      log.trainingType === 'Corrida' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                      log.trainingType === 'Livre' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
-                      'bg-slate-600/10 text-slate-400 border border-slate-600/20'
-                    }`}>
-                      {log.trainingType}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                        log.trainingType === 'Híbrido' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                        log.trainingType === 'Musculação' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        log.trainingType === 'Corrida' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        log.trainingType === 'Livre' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                        'bg-slate-600/10 text-slate-400 border border-slate-600/20'
+                      }`}>
+                        {log.trainingType}
+                      </span>
+                      <button type="button" onClick={() => handleEditLog(log)} className="text-xs text-indigo-300 hover:text-indigo-200">Editar</button>
+                    </div>
                   </td>
                 </tr>
               ))}

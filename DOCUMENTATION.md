@@ -22,6 +22,15 @@ A aplicação é um rastreador metabólico Full-Stack desenhado para tolerar fal
 * **Gráficos:** Recharts (Renderização SVG responsiva no cliente).
 * **Estilização:** Tailwind CSS.
 * **Hospedagem:** Vercel (Ambiente Serverless).
+* **Fluxo principal:** onboarding inicial → cadastro de logs diários → recalculo adaptativo da meta → exibição de dashboards e insights.
+
+### Estrutura de pastas importante
+* `app/` — rotas da aplicação, incluindo páginas e APIs.
+* `app/api/logs/route.ts` — endpoint para leitura e escrita de logs diários.
+* `app/api/setup/route.ts` — onboarding e salvamento das preferências do usuário.
+* `lib/metabolicAlgo.ts` — motor de cálculo de metas e insights.
+* `prisma/schema.prisma` — modelo de dados usado pelo Prisma.
+* `public/` — arquivos estáticos e assets públicos.
 
 ---
 
@@ -36,6 +45,7 @@ Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
 * `goal`: `"loss"`, `"maintenance"`, `"gain"`.
 * `weeklyRate`: Ritmo de progressão esperado (ex: `-0.5` kg).
 * `currentCalorieTarget`: Meta atual (atualizada dinamicamente pelo motor metabólico).
+* `createdAt` e `updatedAt`: auditoria básica.
 
 ### Modelo `DailyLog` (Série Temporal)
 * `date`: `String` (PK) no formato `YYYY-MM-DD`.
@@ -47,12 +57,23 @@ Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
 * `waterIntake`: `Int?` (Hidratação em ml).
 * `stressLevel`: `Int?` (Nível subjetivo de estresse de 1 a 5).
 * `mood`: `String?` (Humor diário: "Ótimo", "Bom", "Regular", "Ruim").
+* `createdAt`: timestamp de criação.
+
+### Regras de integridade importantes
+* Nunca trocar `date` para `DateTime`.
+* Nunca remover campos opcionais sem considerar compatibilidade com dados antigos.
+* Sempre manter o `id` do `UserSettings` como `singleton`.
 
 ---
 
 ## 🧠 3. O Motor Metabólico (`lib/metabolicAlgo.ts`)
 
 A lógica central da aplicação resolve o problema das fórmulas de internet (que erram muito) usando os próprios dados do usuário. Opera em duas fases:
+
+### Funções principais
+* `calculateInitialTarget(data)` — calcula a meta inicial com base em Mifflin-St Jeor e objetivo desejado.
+* `recalculateAdaptiveTarget(logs, settings)` — recalcula a meta quando há dados suficientes.
+* `generateInsights(logs, settings)` — cria recomendações semanais com base em ingestão, sono, água, estresse e humor.
 
 ### Fase 1: Cálculo Base (Heurística de Mifflin-St Jeor)
 Quando há **menos de 14 dias** de logs, a aplicação calcula o basal clínico:
@@ -72,9 +93,22 @@ Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algorit
 
 O endpoint `/api/logs` retorna agora `{ logs, insights }`, e o front-end exibe recomendações semanais baseadas no estado atual do usuário.
 
+### Regras de negócio do motor
+* Se há menos de 14 logs, a aplicação usa a meta inicial.
+* Se há 14 logs ou mais, a aplicação tenta recalcular com base em progresso real.
+* Ajustes muito bruscos são evitados com suavização de 45%/55% e limite de variação de 150 kcal.
+* O algoritmo evita recalcular quando há poucos pesos válidos ou poucas entradas calóricas.
+
 ---
 
 ## 🚀 4. Variáveis de Ambiente e Conexão (Neon / Vercel)
+
+### Variáveis exigidas
+* `POSTGRES_PRISMA_URL` — conexão principal do Prisma para o banco PostgreSQL.
+* `POSTGRES_URL_NON_POOLING` — conexão sem pool usada por validações e sincronização local.
+
+### Observação importante
+Em ambiente local, o Prisma precisa das duas variáveis para validar o schema e rodar `db push`/`generate`.
 
 As variáveis abaixo são injetadas automaticamente pela Vercel no ambiente de produção. Para desenvolvimento local, devem constar no arquivo `.env`:
 
@@ -89,6 +123,7 @@ POSTGRES_URL_NON_POOLING="postgres://default:xxx@ep-xxx.us-east-1.postgres.verce
 
 ## 🧪 5. Como testar localmente
 
+### Fluxo recomendado
 1. Instale as dependências:
 
 ```bash
@@ -104,7 +139,7 @@ npx prisma generate
 npx prisma db push
 ```
 
-4. Execute a aplicação no modo de desenvolvimento:
+4. Execute a aplicação:
 
 ```bash
 npm run dev
@@ -115,3 +150,38 @@ npm run dev
 ```bash
 npm run build
 ```
+
+### Pontos para checar em caso de erro
+* `POSTGRES_URL_NON_POOLING` ausente → erro de validação do Prisma.
+* `prisma generate` não rodou → cliente desatualizado.
+* `next build` quebrando em `app/api/logs/route.ts` → confira se o schema do Prisma inclui os campos usados pelo backend.
+
+---
+
+## 🧩 6. Comportamento atual do front-end
+
+A interface principal foi expandida para incluir:
+* formulário de onboarding inicial;
+* formulário diário com registro de peso, calorias, treino, sono, água, estresse e humor;
+* painel de insights automáticos;
+* alertas visuais baseados em tendência recente;
+* gráficos de tendência de peso e aderência calórica;
+* tabela com histórico recente e botão de edição para registros anteriores.
+
+### Regras de UX implementadas
+* Se o usuário marcar `Livre`, o app impede mais de um dia livre nos últimos 7 dias.
+* Os campos de peso, calorias e sono são opcionais, permitindo lacunas de registro.
+* O formulário de edição reaproveita os valores de um registro existente para correção.
+
+---
+
+## 🛠️ 7. Pontos de atenção para manutenção
+
+Ao alterar o projeto, tenha cuidado com:
+* a compatibilidade do schema do Prisma com a API;
+* a estabilidade do algoritmo adaptativo;
+* o formato da data em `YYYY-MM-DD`;
+* os dados opcionais em `DailyLog` para não quebrar entradas antigas;
+* a lógica de insights, que depende de dados recentes suficientes para fazer sentido.
+
+Se alguma mudança alterar a estrutura de `DailyLog`, ajuste a interface, a API e a documentação em conjunto.
