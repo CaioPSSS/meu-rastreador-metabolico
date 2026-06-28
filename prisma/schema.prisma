@@ -27,5 +27,9 @@ model DailyLog {
           caloriesConsumed Int?     // Calorias ingeridas (opcional)
             caloriesBurned   Int?     // Calorias gastas com exercícios (opcional)
               trainingType     String   // "Descanso", "Musculação", "Corrida", "Híbrido", "Livre"
-                createdAt        DateTime @default(now())
+                sleepHours       Float?   // Horas de sono reportadas
+                  waterIntake      Int?     // Água ingerida em ml
+                    stressLevel      Int?     // Nível subjetivo de estresse 1-5
+                      mood             String?  // Humor diário
+                        createdAt        DateTime @default(now())
 }

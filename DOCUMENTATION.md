@@ -81,3 +81,37 @@ As variáveis abaixo são injetadas automaticamente pela Vercel no ambiente de p
 ```env
 POSTGRES_PRISMA_URL="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb?pgbouncer=true&connect_timeout=15"
 POSTGRES_URL_NON_POOLING="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb"
+```
+
+> Nota: O `POSTGRES_URL_NON_POOLING` é necessário para que o Prisma valide o schema localmente e funcione no build serverless.
+
+---
+
+## 🧪 5. Como testar localmente
+
+1. Instale as dependências:
+
+```bash
+npm install
+```
+
+2. Crie um arquivo `.env` com as variáveis de conexão PostgreSQL acima.
+
+3. Gere o cliente Prisma e sincronize o schema:
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+4. Execute a aplicação no modo de desenvolvimento:
+
+```bash
+npm run dev
+```
+
+5. Para validar a build como no Vercel:
+
+```bash
+npm run build
+```
