@@ -9,6 +9,10 @@ interface Log {
   caloriesConsumed: number | null;
   caloriesBurned: number | null;
   trainingType: string;
+  sleepHours: number | null;
+  waterIntake: number | null;
+  stressLevel: number | null;
+  mood: string | null;
 }
 
 interface Settings {
@@ -22,6 +26,7 @@ interface Settings {
 export default function Home() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [insights, setInsights] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form de Onboarding
@@ -33,7 +38,7 @@ export default function Home() {
     d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   };
-  const [logForm, setLogForm] = useState({ date: getYesterdayString(), weight: '', caloriesConsumed: '', caloriesBurned: '', trainingType: 'Descanso' });
+  const [logForm, setLogForm] = useState({ date: getYesterdayString(), weight: '', caloriesConsumed: '', caloriesBurned: '', trainingType: 'Descanso', sleepHours: '', waterIntake: '', stressLevel: '3', mood: 'Regular' });
   const [clientMessage, setClientMessage] = useState({ type: '', text: '' });
 
   async function fetchData() {
@@ -44,7 +49,8 @@ export default function Home() {
 
       const resLogs = await fetch('/api/logs');
       const dataLogs = await resLogs.json();
-      setLogs(dataLogs);
+      setLogs(dataLogs.logs);
+      setInsights(dataLogs.insights || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -87,7 +93,17 @@ export default function Home() {
     });
 
     setClientMessage({ type: 'success', text: 'Dados computados com sucesso! O algoritmo recalculou seu progresso.' });
-    setLogForm({ date: getYesterdayString(), weight: '', caloriesConsumed: '', caloriesBurned: '', trainingType: 'Descanso' });
+    setLogForm({
+      date: getYesterdayString(),
+      weight: '',
+      caloriesConsumed: '',
+      caloriesBurned: '',
+      trainingType: 'Descanso',
+      sleepHours: '',
+      waterIntake: '',
+      stressLevel: '3',
+      mood: 'Regular',
+    });
     await fetchData();
   };
 
@@ -177,6 +193,18 @@ export default function Home() {
           <span className="text-2xl font-black text-emerald-400">{settings.currentCalorieTarget} kcal</span>
         </div>
       </div>
+      <section className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-slate-200 mb-4">💡 Insights Automáticos</h2>
+        <div className="space-y-3">
+          {insights.length > 0 ? (
+            insights.map((insight, index) => (
+              <p key={index} className="text-slate-300 text-sm leading-6">• {insight}</p>
+            ))
+          ) : (
+            <p className="text-slate-500 text-sm">Ainda não há insights suficientes. Registre mais dias para receber recomendações.</p>
+          )}
+        </div>
+      </section>
 
       {/* Grid de Inputs e Mensagens */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -214,6 +242,33 @@ export default function Home() {
                 <option value="Corrida">Sessão de Corrida / Cardio</option>
                 <option value="Híbrido">Dia Híbrido (Força + Cardio)</option>
                 <option value="Livre">Dia Livre (Refeição Fora/Off)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-slate-400 mb-1">Sono (horas)</label>
+              <input type="number" step="0.1" min="0" max="24" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={logForm.sleepHours} onChange={e => setLogForm({...logForm, sleepHours: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-slate-400 mb-1">Hidratação (ml)</label>
+              <input type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={logForm.waterIntake} onChange={e => setLogForm({...logForm, waterIntake: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-slate-400 mb-1">Estresse</label>
+              <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={logForm.stressLevel} onChange={e => setLogForm({...logForm, stressLevel: e.target.value})}>
+                <option value="1">1 — Muito baixo</option>
+                <option value="2">2 — Baixo</option>
+                <option value="3">3 — Moderado</option>
+                <option value="4">4 — Alto</option>
+                <option value="5">5 — Muito alto</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs uppercase text-slate-400 mb-1">Humor</label>
+              <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={logForm.mood} onChange={e => setLogForm({...logForm, mood: e.target.value})}>
+                <option value="Ótimo">Ótimo</option>
+                <option value="Bom">Bom</option>
+                <option value="Regular">Regular</option>
+                <option value="Ruim">Ruim</option>
               </select>
             </div>
             <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg transition-colors shadow-lg">Salvar Dados</button>
@@ -268,6 +323,10 @@ export default function Home() {
                 <th className="p-3">Peso</th>
                 <th className="p-3">Consumo</th>
                 <th className="p-3">Gasto Exercício</th>
+                <th className="p-3">Sono</th>
+                <th className="p-3">Água</th>
+                <th className="p-3">Estresse</th>
+                <th className="p-3">Humor</th>
                 <th className="p-3">Tipo de Rotina</th>
               </tr>
             </thead>
@@ -278,6 +337,10 @@ export default function Home() {
                   <td className="p-3 text-white">{log.weight ? `${log.weight} kg` : <span className="text-slate-600">— Esquecido</span>}</td>
                   <td className="p-3 text-white">{log.caloriesConsumed ? `${log.caloriesConsumed} kcal` : <span className="text-slate-600">— Esquecido</span>}</td>
                   <td className="p-3 text-amber-400">{log.caloriesBurned ? `+${log.caloriesBurned} kcal` : '0 kcal'}</td>
+                  <td className="p-3 text-white">{log.sleepHours ? `${log.sleepHours}h` : <span className="text-slate-600">—</span>}</td>
+                  <td className="p-3 text-white">{log.waterIntake ? `${log.waterIntake} ml` : <span className="text-slate-600">—</span>}</td>
+                  <td className="p-3 text-white">{log.stressLevel ? log.stressLevel : <span className="text-slate-600">—</span>}</td>
+                  <td className="p-3 text-white">{log.mood || <span className="text-slate-600">—</span>}</td>
                   <td className="p-3">
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
                       log.trainingType === 'Híbrido' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :

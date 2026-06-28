@@ -1,4 +1,4 @@
-# 📘 Documentação Técnica: Metabolic Tracker (v2.0)
+# 📘 Documentação Técnica: Metabolic Tracker
 
 Esta documentação serve como o guia definitivo de arquitetura, regras de negócio e infraestrutura para desenvolvedores humanos e agentes autônomos de IA (como GitHub Copilot, Cursor, etc.) que assumirem a manutenção deste projeto.
 
@@ -43,6 +43,10 @@ Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
 * `caloriesConsumed`: `Int?` (Ingestão).
 * `caloriesBurned`: `Int?` (Gasto em exercícios).
 * `trainingType`: `String` (Tags de esforço: "Descanso", "Musculação", "Corrida", "Híbrido", "Livre").
+* `sleepHours`: `Float?` (Horas de sono reportadas).
+* `waterIntake`: `Int?` (Hidratação em ml).
+* `stressLevel`: `Int?` (Nível subjetivo de estresse de 1 a 5).
+* `mood`: `String?` (Humor diário: "Ótimo", "Bom", "Regular", "Ruim").
 
 ---
 
@@ -55,14 +59,18 @@ Quando há **menos de 14 dias** de logs, a aplicação calcula o basal clínico:
 `TMB = (10 * Peso) + (6.25 * Altura) - (5 * Idade) + Constante` (onde Constante é +5 p/ Homem, -161 p/ Mulher).
 Aplica-se o fator de atividade e soma-se o déficit/superávit do objetivo (assumindo que 1kg corporais = 7700 kcal).
 
-### Fase 2: Cálculo Empírico Adaptativo
-Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algoritmo abandona a teoria e calcula a termodinâmica real:
+### Fase 2: Cálculo Empírico Adaptativo e Insights
+Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algoritmo passa a ajustar a meta com base no comportamento real e nas tendências de progresso.
 1. Extrai a média de peso isolada da Semana 1 e da Semana 2, ignorando dias sem pesagem (`null`).
 2. Calcula o delta real de massa: `Variação_KG = Média_Semana_2 - Média_Semana_1`.
 3. Descobre o impacto energético real diário: `Delta_Energia = (Variação_KG * 7700) / 7`.
-4. Define o **TDEE Real**: `(Calorias_Ingeridas_Média - Delta_Energia) + Calorias_Gastas_Média`.
-5. Recalcula a nova meta aplicando o objetivo do usuário em cima deste novo TDEE.
-6. Limita o resultado por segurança clínica (mínimo de 1200 kcal, máximo de 5000 kcal).
+4. Define o **TDEE Empírico**: `(Calorias_Ingeridas_Média - Delta_Energia) + Calorias_Gastas_Média`.
+5. Recalcula a nova meta aplicando o objetivo do usuário em cima deste TDEE.
+6. Aplica suavização e limites de mudança para evitar ajustes abruptos, permitindo variações de até 150 kcal a partir da meta atual.
+7. Se os dados estiverem insuficientes (menos de 3 pesos por semana ou menos de 10 dias de calorias registradas), mantém a meta atual sem recalcular.
+8. Gera insights automáticos a partir dos últimos 7 dias de registro, avaliando ingestão, sono, água, estresse e humor.
+
+O endpoint `/api/logs` retorna agora `{ logs, insights }`, e o front-end exibe recomendações semanais baseadas no estado atual do usuário.
 
 ---
 
