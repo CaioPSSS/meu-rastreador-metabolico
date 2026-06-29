@@ -149,7 +149,7 @@ export default function MetabolicCharts({ logs, settings }: MetabolicChartsProps
     { subject: 'Aderência', score: parseFloat(adherenceScore.toFixed(0)) },
   ];
 
-  const validWeights = orderedLogs.filter((log) => typeof log.weight === 'number');
+  const validWeights = orderedLogs.filter((log): log is Log & { weight: number } => typeof log.weight === 'number');
   const weightChange7d = validWeights.length >= 2
     ? parseFloat((validWeights[validWeights.length - 1].weight - validWeights[Math.max(0, validWeights.length - 2)].weight).toFixed(1))
     : null;
