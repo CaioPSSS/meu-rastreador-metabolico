@@ -203,7 +203,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-8">
         <DailyEntryForm
           logForm={logForm}
           setLogForm={setLogForm}

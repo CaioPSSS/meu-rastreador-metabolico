@@ -181,6 +181,11 @@ A interface principal foi expandida para incluir:
 * `app/page.tsx` foi fragmentado em componentes menores: `OnboardingForm`, `DailyEntryForm`, `MetabolicCharts` e `RecentHistoryTable`.
 * A camada de dados foi isolada em `app/hooks/useMetabolicData.ts` para gerenciar `logs`, `settings`, `insights`, carregamento e erros.
 * Os gráficos de peso usam EMA (Média Móvel Exponencial) para reduzir o impacto de dias antigos e dar mais peso aos registros recentes.
+* O painel principal agora exibe uma visão clínica de dashboard em vez de apenas registros diários:
+  * KPI cards com TDEE empírico, variação de peso em 7 dias, gordura estimada oxidada e Recovery Score.
+  * Gráfico hero preditivo de peso com EWMA e projeção futura de até 14 dias.
+  * Gráfico composto de balanço energético acumulado com déficit diário e área termodinâmica.
+  * Radar de recuperação com sono, hidratação, estresse invertido e adesão calórica.
 
 ### Observações sobre renderização e sincronização inicial
 
