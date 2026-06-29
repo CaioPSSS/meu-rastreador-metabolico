@@ -63,6 +63,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const [isEditing, setIsEditing] = useState(false);
   const [unreadReport, setUnreadReport] = useState<AiReportSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const loadUnreadReport = async () => {
@@ -176,10 +177,11 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   };
 
   const handleCloseReport = async () => {
-    if (!unreadReport) {
-      setShowModal(false);
+    if (!unreadReport || isSubmitting) {
       return;
     }
+
+    setIsSubmitting(true);
 
     try {
       await fetch(`/api/reports/${unreadReport.id}/read`, { method: 'POST' });
@@ -188,6 +190,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
     } finally {
       setShowModal(false);
       setUnreadReport(null);
+      setIsSubmitting(false);
     }
   };
 
@@ -213,7 +216,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => unreadReport && setShowModal(true)}
+            onClick={() => unreadReport !== null && setShowModal(true)}
             className="relative rounded-full border border-slate-700/70 bg-slate-900/70 p-3 text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300"
             aria-label="Abrir relatório clínico"
           >
@@ -227,7 +230,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
         </div>
       </div>
 
-      {showModal && unreadReport ? (
+      {showModal && unreadReport !== null ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
           <div className="w-full max-w-3xl rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -238,7 +241,8 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
               <button
                 type="button"
                 onClick={handleCloseReport}
-                className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                disabled={isSubmitting}
+                className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Ciente. Fechar e Arquivar.
               </button>

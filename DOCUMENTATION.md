@@ -1,229 +1,391 @@
 # 📘 Documentação Técnica: Metabolic Tracker
 
-Esta documentação serve como o guia definitivo de arquitetura, regras de negócio e infraestrutura para desenvolvedores humanos e agentes autônomos de IA (como GitHub Copilot, Cursor, etc.) que assumirem a manutenção deste projeto.
+Esta documentação serve como guia operativo e arquitetural para desenvolvedores humanos e agentes de IA que forem manter ou evoluir este projeto. Ela descreve o estado atual da aplicação, as regras de negócio, as decisões técnicas e os pontos de cuidado para evitar regressões.
 
 ---
 
-## 🤖 DIRETIVAS CRÍTICAS PARA AGENTES DE IA (SYSTEM CONTEXT)
-**Para qualquer IA lendo este repositório antes de gerar código:**
-1. **NÃO ATUALIZE O PRISMA PARA A VERSÃO 6 OU 7.** O projeto está intencionalmente fixado na versão `^5.x`. O Vercel Postgres e nossa configuração de schema não suportam a sintaxe de `url` e `directUrl` das versões mais recentes do Prisma sem um `prisma.config.ts`. Mantenha a v5.
-2. **NÃO ALTERE O SCRIPT DE BUILD.** O script correto no `package.json` deve ser estritamente `"build": "prisma db push && next build"`. Como usamos o Vercel Postgres (Neon) serverless, as tabelas precisam ser sincronizadas a cada deploy.
-3. **MANTENHA A CHAVE PRIMÁRIA COMO STRING.** O campo `date` no modelo `DailyLog` é uma `String` (formato ISO `YYYY-MM-DD`). Não mude para `DateTime`. Isso previne bugs globais de fuso horário, garantindo que o dia registrado no celular seja o mesmo salvo no banco de dados.
+## 🤖 Diretrizes críticas para agentes de IA
+
+Antes de editar qualquer arquivo, respeite estas regras:
+
+1. Não atualize o Prisma para a versão 6 ou 7. O projeto permanece fixado na versão 5.x para compatibilidade com o Vercel Postgres e o esquema atual.
+2. Não altere o script de build. O build deve continuar sendo: `prisma db push && next build`.
+3. Não mude o campo de data do modelo DailyLog de String para DateTime. O formato ISO `YYYY-MM-DD` é parte do contrato do sistema.
+4. Preserve os campos opcionais em DailyLog. Eles existem para evitar quebra de compatibilidade com registros antigos.
+5. Sempre considere o efeito sobre o algoritmo adaptativo antes de alterar a estrutura de dados ou a lógica de insights.
 
 ---
 
-## 🏗️ 1. Visão Geral da Arquitetura e Stack
+## 🧭 1. Visão geral do projeto
 
-A aplicação é um rastreador metabólico Full-Stack desenhado para tolerar falhas (dados parciais/dias esquecidos) e calcular o Gasto Energético Total (TDEE) real e empírico do usuário.
+O Metabolic Tracker é uma aplicação full-stack para monitorar dados metabólicos de forma contínua e transformar isso em uma leitura clínica e preditiva, não apenas em um diário de anotações.
 
-* **Front-end / Back-end:** Next.js 14+ (App Router).
-* **Banco de Dados:** Vercel Postgres (Engine: Neon Serverless PostgreSQL).
-* **ORM:** Prisma Client (v5.x).
-* **Gráficos:** Recharts (Renderização SVG responsiva no cliente).
-* **Estilização:** Tailwind CSS.
-* **Hospedagem:** Vercel (Ambiente Serverless).
-* **Fluxo principal:** onboarding inicial → cadastro de logs diários → recalculo adaptativo da meta → exibição de dashboards e insights.
+A aplicação atual possui quatro eixos centrais:
 
-### Estrutura de pastas importante
-* `app/` — rotas da aplicação, incluindo páginas e APIs.
-* `app/api/logs/route.ts` — endpoint para leitura e escrita de logs diários.
-* `app/api/setup/route.ts` — onboarding e salvamento das preferências do usuário.
-* `lib/metabolicAlgo.ts` — motor de cálculo de metas e insights.
-* `prisma/schema.prisma` — modelo de dados usado pelo Prisma.
-* `public/` — arquivos estáticos e assets públicos.
+- Coleta de dados diários: peso, calorias, treino, sono, água, estresse, humor, proteína e circunferência da cintura.
+- Cálculo adaptativo de meta calórica com base em tendência real de peso.
+- Visualizações analíticas de tendência, déficit acumulado e recuperação.
+- Análise semanal automática com IA, persistência de relatório e notificações em UI/WhatsApp.
 
----
+### Stack atual
 
-## 🗄️ 2. Estrutura do Banco de Dados (Prisma Schema)
-
-O banco é projetado para aceitar lacunas de dados. Campos como `weight` e `caloriesConsumed` são opcionais (`Float?`, `Int?`).
-
-### Modelo `UserSettings` (Singleton)
-Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
-* `id`: Fixo como `"singleton"`.
-* `age`, `height`, `gender`, `activityLevel`: Usados para o cálculo heurístico (Mifflin-St Jeor).
-* `goal`: `"loss"`, `"maintenance"`, `"gain"`.
-* `weeklyRate`: Ritmo de progressão esperado (ex: `-0.5` kg).
-* `currentCalorieTarget`: Meta atual (atualizada dinamicamente pelo motor metabólico).
-* `createdAt` e `updatedAt`: auditoria básica.
-
-### Modelo `DailyLog` (Série Temporal)
-* `date`: `String` (PK) no formato `YYYY-MM-DD`.
-* `weight`: `Float?` (Peso matinal).
-* `caloriesConsumed`: `Int?` (Ingestão).
-* `caloriesBurned`: `Int?` (Gasto em exercícios).
-* `trainingType`: `String` (Tags de esforço: "Descanso", "Musculação", "Corrida", "Híbrido", "Livre").
-* `sleepHours`: `Float?` (Horas de sono reportadas).
-* `waterIntake`: `Int?` (Hidratação em ml).
-* `stressLevel`: `Int?` (Nível subjetivo de estresse de 1 a 5).
-* `mood`: `String?` (Humor diário: "Ótimo", "Bom", "Regular", "Ruim").
-* `proteinConsumed`: `Int?` (Proteína consumida em gramas, novo).
-* `waistCircumference`: `Float?` (Circunferência da cintura em cm, novo rastreador de composição).
-* `createdAt`: timestamp de criação.
-
-### Regras de integridade importantes
-* Nunca trocar `date` para `DateTime`.
-* Nunca remover campos opcionais sem considerar compatibilidade com dados antigos.
-* Sempre manter o `id` do `UserSettings` como `singleton`.
+- Front-end e back-end: Next.js 16 com App Router.
+- Linguagem: TypeScript.
+- Banco: PostgreSQL via Vercel Postgres / Neon.
+- ORM: Prisma Client 5.x.
+- UI: Tailwind CSS, Recharts, lucide-react.
+- IA: Google Gemini via `@google/generative-ai`.
+- Notificações: CallMeBot para WhatsApp.
 
 ---
 
-## 🧠 3. O Motor Metabólico (`lib/metabolicAlgo.ts`)
+## 🗂️ 2. Mapa de arquivos e responsabilidades
 
-A lógica central da aplicação resolve o problema das fórmulas de internet (que erram muito) usando os próprios dados do usuário. Opera em duas fases:
+### Front-end
 
-### Funções principais
-* `calculateInitialTarget(data)` — calcula a meta inicial com base em Mifflin-St Jeor e objetivo desejado.
-* `recalculateAdaptiveTarget(logs, settings)` — recalcula a meta quando há dados suficientes.
-* `generateInsights(logs, settings)` — cria recomendações semanais com base em ingestão, sono, água, estresse e humor.
+- [app/page.tsx](app/page.tsx): Server Component que carrega dados iniciais via Prisma e passa props para o dashboard cliente.
+- [app/components/DashboardClient.tsx](app/components/DashboardClient.tsx): componente principal do dashboard. Gerencia estado da UI, notificações, modal de relatório e envio do formulário diário.
+- [app/components/OnboardingForm.tsx](app/components/OnboardingForm.tsx): onboarding inicial do usuário.
+- [app/components/DailyEntryForm.tsx](app/components/DailyEntryForm.tsx): formulário de registro diário.
+- [app/components/MetabolicCharts.tsx](app/components/MetabolicCharts.tsx): visualizações analíticas principais.
+- [app/components/RecentHistoryTable.tsx](app/components/RecentHistoryTable.tsx): tabela com histórico recente.
 
-### Fase 1: Cálculo Base (Heurística de Mifflin-St Jeor)
-Quando há **menos de 14 dias** de logs, a aplicação calcula o basal clínico:
-`TMB = (10 * Peso) + (6.25 * Altura) - (5 * Idade) + Constante` (onde Constante é +5 p/ Homem, -161 p/ Mulher).
-Aplica-se o fator de atividade e soma-se o déficit/superávit do objetivo (assumindo que 1kg corporais = 7700 kcal).
+### Estado e dados
 
-### Fase 2: Cálculo Empírico Adaptativo e Insights
-Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algoritmo passa a ajustar a meta com base no comportamento real e nas tendências de progresso.
-1. Substitui o bloco rígido de semana 1 vs. semana 2 por uma regressão linear de pesos válidos nos últimos 14 a 21 dias.
-2. Calcula a inclinação da reta de mínimos quadrados para estimar a variação diária de peso (`kg/dia`), eliminando ruído de flutuações de glicogênio e água.
-3. Converte essa tendência em energia real: `Delta_Energia = (Trend_kg_per_day * 7700)`.
-4. Define o **TDEE Empírico** como `Calorias_Ingeridas_Média - Delta_Energia`.
-5. Usa `caloriesBurned` apenas para insights comportamentais e crédito dinâmico de exercício, não para o cálculo do TDEE basal adaptativo.
-6. Recalcula a nova meta aplicando o objetivo do usuário sobre esse TDEE empírico.
-7. Aplica suavização e limites de ajuste para evitar mudanças abruptas, permitindo variações de até 150 kcal da meta atual.
-8. Se os dados estiverem insuficientes (menos de 4 pesos válidos na janela ou menos de 10 dias de calorias registradas), mantém a meta atual sem recalcular.
-9. Gera insights automáticos a partir dos últimos 7 dias de registro, avaliando ingestão, sono, água, estresse, humor e proteína.
+- [app/hooks/useMetabolicData.ts](app/hooks/useMetabolicData.ts): hook central para sincronizar settings, logs, insights, loading e erro.
+- [lib/dateUtils.ts](lib/dateUtils.ts): utilitários para manipulação de datas e compatibilidade com fusos.
+- [lib/metabolicAlgo.ts](lib/metabolicAlgo.ts): motor metabólico com heurística inicial, recalculação adaptativa e geração de insights.
+- [lib/prisma.ts](lib/prisma.ts): instância singleton do Prisma Client.
 
-O endpoint `/api/logs` retorna agora `{ logs, insights }`, e o front-end exibe recomendações semanais baseadas no estado atual do usuário.
+### API Routes
 
-### Regras de negócio do motor
-* Se há menos de 14 logs, a aplicação usa a meta inicial.
-* Se há 14 logs ou mais, a aplicação tenta recalcular com base em progresso real.
-* O TDEE empírico agora usa regressão linear de peso, não diferença de médias semanais.
-* `caloriesBurned` não é somado no cálculo do TDEE adaptativo; ele entra apenas em insights comportamentais.
-* Ajustes muito bruscos são evitados com suavização de 45%/55% e limite de variação de 150 kcal.
-* O algoritmo evita recalcular quando há poucos pesos válidos ou poucas entradas calóricas.
+- [app/api/logs/route.ts](app/api/logs/route.ts): leitura e gravação de logs diários.
+- [app/api/setup/route.ts](app/api/setup/route.ts): onboarding e persistência de UserSettings.
+- [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts): execução semanal da análise IA.
+- [app/api/reports/unread/route.ts](app/api/reports/unread/route.ts): consulta do relatório não lido mais recente.
+- [app/api/reports/[id]/read/route.ts](app/api/reports/[id]/read/route.ts): marca um relatório como lido.
+
+### Banco
+
+- [prisma/schema.prisma](prisma/schema.prisma): modelo de dados do projeto.
+- [vercel.json](vercel.json): configuração de cron jobs do Vercel.
 
 ---
 
-## 🚀 4. Variáveis de Ambiente e Conexão (Neon / Vercel)
+## 🗄️ 3. Modelo de dados
 
-### Variáveis exigidas
-* `POSTGRES_PRISMA_URL` — conexão principal do Prisma para o banco PostgreSQL.
-* `POSTGRES_URL_NON_POOLING` — conexão sem pool usada por validações e sincronização local.
+### 3.1 UserSettings
 
-### Observação importante
-Em ambiente local, o Prisma precisa das duas variáveis para validar o schema e rodar `db push`/`generate`.
+Modelo singleton usado para armazenar as preferências clínicas e a meta atual.
 
-As variáveis abaixo são injetadas automaticamente pela Vercel no ambiente de produção. Para desenvolvimento local, devem constar no arquivo `.env`:
+Campos:
+- id: fixo como `singleton`
+- age, height, gender, activityLevel: usados na heurística inicial.
+- goal: `loss`, `maintenance` ou `gain`
+- weeklyRate: progresso esperado por semana
+- currentCalorieTarget: meta atual recalculada pelo motor
+- createdAt / updatedAt: auditoria
+
+### 3.2 DailyLog
+
+Modelo de série temporal que representa um dia de registro.
+
+Campos principais:
+- date: String com formato `YYYY-MM-DD`
+- weight: Float opcional
+- caloriesConsumed: Int opcional
+- caloriesBurned: Int opcional
+- trainingType: String
+- sleepHours: Float opcional
+- waterIntake: Int opcional
+- stressLevel: Int opcional
+- mood: String opcional
+- proteinConsumed: Int opcional
+- waistCircumference: Float opcional
+- createdAt: DateTime
+
+Regras de integridade:
+- Nunca trocar `date` para DateTime.
+- Preservar todos os campos opcionais.
+- Não remover campos sem planejar migração compatível.
+
+### 3.3 AiReport
+
+Modelo novo criado para persistir relatórios semanais de IA.
+
+Campos:
+- id: cuid()
+- createdAt: DateTime
+- content: String em Text
+- isRead: Boolean default false
+
+Uso:
+- Armazenar o relatório gerado pelo Gemini.
+- Expor o conteúdo no dashboard via modal.
+- Permitir arquivamento ao marcar como lido.
+
+---
+
+## 🧠 4. Motor metabólico e lógica de negócio
+
+A lógica central está em [lib/metabolicAlgo.ts](lib/metabolicAlgo.ts).
+
+### 4.1 Fase inicial
+
+Enquanto há poucos registros, a aplicação usa uma estimativa inicial baseada em Mifflin-St Jeor e no objetivo do usuário.
+
+### 4.2 Fase adaptativa
+
+Quando há 14 ou mais logs, o sistema tenta recalcular a meta com base em tendência real de peso e ingestão.
+
+Regras importantes:
+- O cálculo usa regressão linear de pesos válidos.
+- O algoritmo tenta filtrar ruído hídrico e de glicogênio.
+- O déficit acumulado é usado como sinal termodinâmico.
+- `caloriesBurned` não entra no cálculo principal de TDEE adaptativo; é usado principalmente como contexto comportamental.
+- Ajustes bruscos são amortecidos.
+
+### 4.3 Geração de insights
+
+O sistema cria insights semanais com base em:
+- ingestão calórica média
+- sono
+- hidratação
+- estresse
+- humor
+- proteína
+
+Esses insights alimentam a seção de alertas e a análise semanal de IA.
+
+---
+
+## 🧩 5. Fluxos operacionais atuais
+
+### 5.1 Fluxo de onboarding
+
+1. O usuário preenche os dados iniciais no componente [app/components/OnboardingForm.tsx](app/components/OnboardingForm.tsx).
+2. Os dados são enviados para [app/api/setup/route.ts](app/api/setup/route.ts).
+3. O sistema cria ou atualiza o UserSettings singleton.
+4. O dashboard passa a exibir os gráficos e o formulário diário.
+
+### 5.2 Fluxo de registro diário
+
+1. O usuário preenche o formulário em [app/components/DailyEntryForm.tsx](app/components/DailyEntryForm.tsx).
+2. O evento é processado por [app/components/DashboardClient.tsx](app/components/DashboardClient.tsx).
+3. O hook [app/hooks/useMetabolicData.ts](app/hooks/useMetabolicData.ts) aplica atualização otimista local.
+4. O endpoint [app/api/logs/route.ts](app/api/logs/route.ts) salva ou atualiza o registro.
+5. Se houver dados suficientes, o algoritmo adaptativo recalcula a meta.
+
+### 5.3 Fluxo de dashboard analítico
+
+O dashboard exibe:
+- KPI cards com TDEE, variação de peso, gordura estimada oxidada e Recovery Score.
+- Gráfico de tendência com EWMA e projeção futura.
+- Gráfico de balanço energético acumulado.
+- Radar de recuperação.
+
+Esses gráficos usam Recharts e consomem os dados já carregados pelo hook.
+
+### 5.4 Fluxo de análise semanal com IA
+
+1. O cron job do Vercel dispara [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts).
+2. O endpoint valida um token `CRON_SECRET`.
+3. Busca os últimos 14 registros de DailyLog.
+4. Formata um payload enxuto e envia para o Gemini `gemini-1.5-flash`.
+5. Cria um registro em AiReport.
+6. Tenta enviar a mensagem por WhatsApp via CallMeBot.
+7. O dashboard consulta os relatórios não lidos e exibe o modal de notificação.
+
+---
+
+## 🖥️ 6. Front-end: detalhes de implementação
+
+### 6.1 DashboardClient
+
+Este componente é o centro da experiência. Ele:
+- carrega settings, logs e insights do hook;
+- controla o formulário de setup e log;
+- calcula os alerts visuais;
+- gerencia o estado de relatório não lido;
+- renderiza o sino de notificações e o modal.
+
+### 6.2 Modal de relatório
+
+O modal de relatório:
+- é montado apenas quando `unreadReport !== null`;
+- mostra o conteúdo bruto do relatório em formato de texto com whitespace preservado;
+- usa Tailwind para aparência clínica e escura;
+- desabilita o botão de fechamento enquanto a requisição de marcação como lido está em andamento.
+
+### 6.3 Gráficos
+
+Os gráficos são responsabilidade de [app/components/MetabolicCharts.tsx](app/components/MetabolicCharts.tsx).
+
+Os componentes visuais atuais são:
+- tendência preditiva de peso com EWMA e projeção futura
+- balanço energético acumulado
+- radar de recuperação
+
+Não altere o propósito visual desses gráficos sem revisar o impacto no entendimento clínico da tela.
+
+---
+
+## 🔌 7. Backend e rotas da API
+
+### 7.1 [app/api/logs/route.ts](app/api/logs/route.ts)
+
+- GET: retorna logs e insights.
+- POST: salva ou atualiza um log diário e recalcula a meta adaptativa quando há dados suficientes.
+
+### 7.2 [app/api/setup/route.ts](app/api/setup/route.ts)
+
+- Responsável por onboarding e atualização de UserSettings.
+
+### 7.3 [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts)
+
+Este endpoint é sensível e deve ser tratado com cuidado.
+
+Regras de execução:
+- valida `CRON_SECRET`
+- usa `maxDuration = 30` para o runtime serverless do Vercel
+- consulta os últimos 14 dias de logs
+- compacta o payload antes de enviar para o Gemini
+- salva o relatório em AiReport
+- tenta enviar WhatsApp sem bloquear o salvamento do relatório em caso de falha
+
+### 7.4 [app/api/reports/unread/route.ts](app/api/reports/unread/route.ts)
+
+- GET simples para recuperar o relatório não lido mais recente.
+
+### 7.5 [app/api/reports/[id]/read/route.ts](app/api/reports/[id]/read/route.ts)
+
+- POST para marcar relatório como lido.
+
+---
+
+## 🧪 8. Variáveis de ambiente
+
+As variáveis abaixo devem existir no ambiente local e/ou Vercel:
+
+- `POSTGRES_PRISMA_URL`: conexão principal do Prisma.
+- `POSTGRES_URL_NON_POOLING`: conexão sem pool usada para validação local e `db push`.
+- `CRON_SECRET`: token de segurança para o cron da IA.
+- `GEMINI_API_KEY`: chave da API do Google Gemini.
+- `WHATSAPP_NUMBER`: número de destino do CallMeBot.
+- `CALLMEBOT_API_KEY`: chave do CallMeBot.
+
+### Exemplo local
 
 ```env
-POSTGRES_PRISMA_URL="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb?pgbouncer=true&connect_timeout=15"
-POSTGRES_URL_NON_POOLING="postgres://default:xxx@ep-xxx.us-east-1.postgres.vercel-storage.com:5432/verceldb"
+POSTGRES_PRISMA_URL="postgres://..."
+POSTGRES_URL_NON_POOLING="postgres://..."
+CRON_SECRET="super-secret"
+GEMINI_API_KEY="..."
+WHATSAPP_NUMBER="5511999999999"
+CALLMEBOT_API_KEY="..."
 ```
 
-> Nota: O `POSTGRES_URL_NON_POOLING` é necessário para que o Prisma valide o schema localmente e funcione no build serverless.
+> Observação importante: sem `POSTGRES_URL_NON_POOLING`, o build local do Prisma falha com erro de validação.
 
 ---
 
-## 🧪 5. Como testar localmente
+## 🚀 9. Como rodar localmente
 
-### Fluxo recomendado
+### Passo a passo
+
 1. Instale as dependências:
 
 ```bash
 npm install
 ```
 
-2. Crie um arquivo `.env` com as variáveis de conexão PostgreSQL acima.
+2. Crie o arquivo `.env` com as variáveis acima.
 
-3. Gere o cliente Prisma e sincronize o schema:
+3. Gere o cliente do Prisma e sincronize o schema:
 
 ```bash
 npx prisma generate
 npx prisma db push
 ```
 
-4. Execute a aplicação:
+4. Inicie o ambiente de desenvolvimento:
 
 ```bash
 npm run dev
 ```
 
-5. Para validar a build como no Vercel:
+5. Valide o build como no Vercel:
 
 ```bash
 npm run build
 ```
 
-### Pontos para checar em caso de erro
-* `POSTGRES_URL_NON_POOLING` ausente → erro de validação do Prisma.
-* `prisma generate` não rodou → cliente desatualizado.
-* `next build` quebrando em `app/api/logs/route.ts` → confira se o schema do Prisma inclui os campos usados pelo backend.
-* `getYesterdayLocalISODate()` usa data local explicita para evitar erros de data em fusos horários diferentes, em vez de `toISOString()`.
+### Verificações rápidas
+
+- `npx prisma generate` deve funcionar sem erro.
+- `npx tsc --noEmit --pretty false` deve terminar sem erros.
+- O dashboard deve carregar sem quebrar em caso de ausência de relatório não lido.
 
 ---
 
-## 🧩 6. Comportamento atual do front-end
+## 🧰 10. Boas práticas para manutenção
 
-A interface principal foi expandida para incluir:
-* formulário de onboarding inicial;
-* formulário diário com registro de peso, calorias, treino, sono, água, estresse e humor;
-* painel de insights automáticos;
-* alertas visuais baseados em tendência recente;
-* gráficos de tendência de peso e aderência calórica;
-* tabela com histórico recente e botão de edição para registros anteriores.
+### 10.1 Ao editar o schema do Prisma
 
-### Regras de UX implementadas
-* Se o usuário marcar `Livre`, o app impede mais de um dia livre nos últimos 7 dias.
-* Os campos de peso, calorias e sono são opcionais, permitindo lacunas de registro.
-* O formulário de edição reaproveita os valores de um registro existente para correção.
-* `app/page.tsx` foi fragmentado em componentes menores: `OnboardingForm`, `DailyEntryForm`, `MetabolicCharts` e `RecentHistoryTable`.
-* A camada de dados foi isolada em `app/hooks/useMetabolicData.ts` para gerenciar `logs`, `settings`, `insights`, carregamento e erros.
-* Os gráficos de peso usam EMA (Média Móvel Exponencial) para reduzir o impacto de dias antigos e dar mais peso aos registros recentes.
-* O painel principal agora exibe uma visão clínica de dashboard em vez de apenas registros diários:
-  * KPI cards com TDEE empírico, variação de peso em 7 dias, gordura estimada oxidada e Recovery Score.
-  * Gráfico hero preditivo de peso com EWMA e projeção futura de até 14 dias.
-  * Gráfico composto de balanço energético acumulado com déficit diário e área termodinâmica.
-  * Radar de recuperação com sono, hidratação, estresse invertido e adesão calórica.
+- Não alterar a versão do Prisma.
+- Não mudar o tipo de `date`.
+- Não remover campos opcionais de DailyLog sem migração explícita.
+- Sempre regenerar o cliente depois de alterar o schema.
 
-### Observações sobre renderização e sincronização inicial
+### 10.2 Ao editar os componentes
 
- - `app/page.tsx` agora é um Server Component que busca `settings` e `logs` via Prisma no servidor e passa `initialSettings`, `initialLogs` e `initialInsights` para o componente cliente `DashboardClient`.
- - O hook `useMetabolicData` aceita esses `initial*` props e evita re-fetch automático quando `initialSettings` não é `null`, garantindo renderização SSR rápida com dados já carregados.
- - Quando `initialSettings` é `null` (usuário sem onboarding), o hook dispara `refresh()` no cliente para buscar os dados necessários.
+- Preserve a lógica atual do hook e o fluxo de dados.
+- Se for adicionar um novo campo à UI, atualize o tipo em [app/hooks/useMetabolicData.ts](app/hooks/useMetabolicData.ts) e o backend.
+- Não introduza renderização condicional agressiva que cause hydration mismatch.
 
-### Comportamento otimista ao gravar logs
+### 10.3 Ao editar a camada de IA
 
- - O método `addLog` em `useMetabolicData` aplica uma atualização otimista local (`setLogs`) inserindo o registro no topo da lista para uma UI responsiva.
- - Em caso de falha na requisição ao endpoint `/api/logs`, o hook restaura os `logs` a partir de um backup e relança o erro para que a UI mostre uma mensagem apropriada.
- - O endpoint `/api/logs` recalcula a meta adaptativa (`recalculateAdaptiveTarget`) quando houver dados suficientes (>= 14), mas a UI confia na resposta otimista até que o `refresh()` confirme o estado final.
+- Mantenha o prompt clínico e a estrutura do payload o mais estáveis possível.
+- Não troque o modelo sem revisar custo, latência e forma do output.
+- Se o WhatsApp falhar, o sistema deve continuar persistindo o relatório em AiReport.
 
-### Campos adicionados e rastreamento de composição
+### 10.4 Ao editar rotas API
 
- - Foram adicionados `proteinConsumed` (Int?) e `waistCircumference` (Float?) ao modelo `DailyLog` para permitir insights de ingestão proteica e mudança de composição corporal.
- - Esses campos são opcionais e não quebram a janela de regressão do algoritmo; são usados para insights, não para o cálculo primário do TDEE adaptativo.
-
-### Sistema semanal de análise clínica com IA
-
- - O projeto agora inclui um fluxo automático de análise semanal com Gemini, persistência em banco e notificações via WhatsApp/UI.
- - O modelo `AiReport` foi adicionado ao schema do Prisma para armazenar os relatórios gerados.
- - O endpoint `app/api/cron/ai-analysis/route.ts` valida um token `CRON_SECRET`, coleta os últimos 14 dias de `DailyLog`, gera um relatório com Gemini `gemini-1.5-flash` e salva o resultado como `AiReport`.
- - O dashboard passou a exibir um sino de notificações que consulta `app/api/reports/unread/route.ts` e abre um modal com o conteúdo do relatório não lido.
- - O fechamento do modal marca o relatório como lido via `app/api/reports/[id]/read/route.ts`.
- - O cronograma no `vercel.json` dispara a análise semanal automaticamente.
-
-Se quiser, eu posso também gerar um trecho de `CHANGELOG.md` com o resumo dessas mudanças antes de você commitar e fazer o `prisma db push` no ambiente que tenha acesso ao banco.
+- Sempre use `try/catch`.
+- Retorne status HTTP apropriados: 200, 401, 500.
+- Não bloquear a criação do relatório por falhas de notificação externas.
 
 ---
 
-## 🛠️ 7. Pontos de atenção para manutenção
+## ⚠️ 11. Pontos de atenção e armadilhas conhecidas
 
-Ao alterar o projeto, tenha cuidado com:
-* a compatibilidade do schema do Prisma com a API;
-* a estabilidade do algoritmo adaptativo;
-* o formato da data em `YYYY-MM-DD`;
-* os dados opcionais em `DailyLog` para não quebrar entradas antigas;
-* a lógica de insights, que depende de dados recentes suficientes para fazer sentido.
+- O build local pode falhar se `POSTGRES_URL_NON_POOLING` não estiver definido.
+- O cron não deve depender de resposta de WhatsApp para concluir a criação do relatório.
+- O modal de relatório deve ser tratado como um estado opcional, nunca como condição garantida.
+- A implementação de gráficos deve respeitar a natureza clínica do produto e não transformar a tela em um simples painel de métricas superficiais.
+- Alterações de schema exigem atualização do Prisma Client, do backend e da documentação.
 
-Se alguma mudança alterar a estrutura de `DailyLog`, ajuste a interface, a API e a documentação em conjunto.
+---
+
+## ✅ 12. Status atual verificado
+
+A implementação atual foi validada com:
+
+```bash
+npx prisma generate
+npx tsc --noEmit --pretty false
+```
+
+Ambos os comandos foram executados com sucesso.
+
+---
+
+## 🛠️ 13. Checklist para a próxima IA
+
+Antes de trabalhar, confirme se você:
+- leu esta documentação;
+- entendeu a regra de manter `date` como String;
+- entendeu a relação entre DailyLog, UserSettings e AiReport;
+- sabe que o build depende de Prisma e das variáveis de ambiente corretas;
+- preserva o fluxo de notificações sem introduzir duplicação de writes;
+- evita regressões na lógica adaptativa do algoritmo metabólico.

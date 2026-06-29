@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { prisma } from '@/lib/prisma';
 
+export const maxDuration = 30;
+
 const SYSTEM_PROMPT = `Você é um cientista de dados e fisiologista esportivo de elite. Sua função é analisar métricas metabólicas semanais de forma fria, realista e estritamente baseada em evidências (termodinâmica e fisiologia do exercício). Você NÃO é um assistente motivacional. Não seja condescendente, não elogie o esforço vazio, não use emojis e vá direto ao ponto.
 
 Contexto do Indivíduo: Submetido a altíssimo estresse físico e mental devido à rotina hospitalar (frequente privação de sono, longos períodos em pé nas enfermarias e centro cirúrgico) e que realiza treinamento híbrido pesado (musculação periodizada e corrida de longa distância).
@@ -38,12 +40,12 @@ export async function GET(request: NextRequest) {
       .slice()
       .reverse()
       .map((log) => ({
-        date: log.date,
-        weight: log.weight,
-        caloriesConsumed: log.caloriesConsumed,
-        proteinConsumed: log.proteinConsumed,
-        sleepHours: log.sleepHours,
-        stressLevel: log.stressLevel,
+        date: typeof log.date === 'string' ? log.date.slice(0, 10) : new Date(log.date).toISOString().slice(0, 10),
+        weight: log.weight ?? null,
+        caloriesConsumed: log.caloriesConsumed ?? null,
+        proteinConsumed: log.proteinConsumed ?? null,
+        sleepHours: log.sleepHours ?? null,
+        stressLevel: log.stressLevel ?? null,
       }));
 
     const prompt = `Analise a seguinte janela metabólica dos últimos 14 dias. Se algum dado estiver ausente, trate como lacuna e não invente valores.\n\n${JSON.stringify(leanPayload, null, 2)}`;
@@ -69,7 +71,11 @@ export async function GET(request: NextRequest) {
 
     if (whatsappNumber && callMeBotKey) {
       const whatsappUrl = `https://api.callmebot.com/whatsapp.php?phone=${whatsappNumber}&text=${encodeURIComponent(reportText)}&apikey=${callMeBotKey}`;
-      await fetch(whatsappUrl);
+      try {
+        await fetch(whatsappUrl);
+      } catch (notificationError) {
+        console.error('Falha ao enviar notificação por WhatsApp.', notificationError);
+      }
     }
 
     return NextResponse.json({ success: true, reportText });
