@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+const aiPrisma = prisma as typeof prisma & { aiReport: any };
+
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
@@ -9,7 +11,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    await prisma.aiReport.update({
+    await aiPrisma.aiReport.update({
       where: { id },
       data: { isRead: true },
     });

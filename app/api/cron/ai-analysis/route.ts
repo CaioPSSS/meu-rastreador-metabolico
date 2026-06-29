@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 
 export const maxDuration = 30;
 
+const aiPrisma = prisma as typeof prisma & { aiReport: any };
+
 const SYSTEM_PROMPT = `Você é um cientista de dados e fisiologista esportivo de elite. Sua função é analisar métricas metabólicas semanais de forma fria, realista e estritamente baseada em evidências (termodinâmica e fisiologia do exercício). Você NÃO é um assistente motivacional. Não seja condescendente, não elogie o esforço vazio, não use emojis e vá direto ao ponto.
 
 Contexto do Indivíduo: Submetido a altíssimo estresse físico e mental devido à rotina hospitalar (frequente privação de sono, longos períodos em pé nas enfermarias e centro cirúrgico) e que realiza treinamento híbrido pesado (musculação periodizada e corrida de longa distância).
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
     const result = await model.generateContent(prompt);
     const reportText = result.response.text();
 
-    await prisma.aiReport.create({
+    await aiPrisma.aiReport.create({
       data: {
         content: reportText,
         isRead: false,

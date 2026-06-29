@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+const aiPrisma = prisma as typeof prisma & { aiReport: any };
+
 export async function GET() {
   try {
-    const report = await prisma.aiReport.findFirst({
+    const report = await aiPrisma.aiReport.findFirst({
       where: { isRead: false },
       orderBy: { createdAt: 'desc' },
     });
