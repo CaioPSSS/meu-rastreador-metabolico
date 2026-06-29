@@ -34,4 +34,6 @@ model DailyLog {
                       proteinConsumed Int?     // Proteína consumida em gramas
                       waistCircumference Float? // Circunferência da cintura em cm
                         createdAt        DateTime @default(now())
+
+  @@index([date(sort: Desc)])
 }

@@ -182,6 +182,25 @@ A interface principal foi expandida para incluir:
 * A camada de dados foi isolada em `app/hooks/useMetabolicData.ts` para gerenciar `logs`, `settings`, `insights`, carregamento e erros.
 * Os gráficos de peso usam EMA (Média Móvel Exponencial) para reduzir o impacto de dias antigos e dar mais peso aos registros recentes.
 
+### Observações sobre renderização e sincronização inicial
+
+ - `app/page.tsx` agora é um Server Component que busca `settings` e `logs` via Prisma no servidor e passa `initialSettings`, `initialLogs` e `initialInsights` para o componente cliente `DashboardClient`.
+ - O hook `useMetabolicData` aceita esses `initial*` props e evita re-fetch automático quando `initialSettings` não é `null`, garantindo renderização SSR rápida com dados já carregados.
+ - Quando `initialSettings` é `null` (usuário sem onboarding), o hook dispara `refresh()` no cliente para buscar os dados necessários.
+
+### Comportamento otimista ao gravar logs
+
+ - O método `addLog` em `useMetabolicData` aplica uma atualização otimista local (`setLogs`) inserindo o registro no topo da lista para uma UI responsiva.
+ - Em caso de falha na requisição ao endpoint `/api/logs`, o hook restaura os `logs` a partir de um backup e relança o erro para que a UI mostre uma mensagem apropriada.
+ - O endpoint `/api/logs` recalcula a meta adaptativa (`recalculateAdaptiveTarget`) quando houver dados suficientes (>= 14), mas a UI confia na resposta otimista até que o `refresh()` confirme o estado final.
+
+### Campos adicionados e rastreamento de composição
+
+ - Foram adicionados `proteinConsumed` (Int?) e `waistCircumference` (Float?) ao modelo `DailyLog` para permitir insights de ingestão proteica e mudança de composição corporal.
+ - Esses campos são opcionais e não quebram a janela de regressão do algoritmo; são usados para insights, não para o cálculo primário do TDEE adaptativo.
+
+Se quiser, eu posso também gerar um trecho de `CHANGELOG.md` com o resumo dessas mudanças antes de você commitar e fazer o `prisma db push` no ambiente que tenha acesso ao banco.
+
 ---
 
 ## 🛠️ 7. Pontos de atenção para manutenção

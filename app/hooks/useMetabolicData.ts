@@ -48,11 +48,15 @@ export interface LogFormState {
   waistCircumference: string;
 }
 
-export function useMetabolicData() {
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [logs, setLogs] = useState<Log[]>([]);
-  const [insights, setInsights] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useMetabolicData(
+  initialSettings: Settings | null = null,
+  initialLogs: Log[] = [],
+  initialInsights: string[] = [],
+) {
+  const [settings, setSettings] = useState<Settings | null>(initialSettings);
+  const [logs, setLogs] = useState<Log[]>(initialLogs);
+  const [insights, setInsights] = useState<string[]>(initialInsights);
+  const [loading, setLoading] = useState(initialSettings === null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
@@ -83,12 +87,54 @@ export function useMetabolicData() {
   }
 
   useEffect(() => {
-    const fetchData = async () => {
-      await refresh();
+    if (initialSettings === null) {
+      const fetchData = async () => {
+        await refresh();
+      };
+
+      void fetchData();
+    }
+  }, [initialSettings]);
+
+  async function addLog(logForm: LogFormState) {
+    const optimisticLog: Log = {
+      date: logForm.date,
+      weight: logForm.weight ? Number(logForm.weight) : null,
+      caloriesConsumed: logForm.caloriesConsumed ? Number(logForm.caloriesConsumed) : null,
+      caloriesBurned: logForm.caloriesBurned ? Number(logForm.caloriesBurned) : null,
+      trainingType: logForm.trainingType,
+      sleepHours: logForm.sleepHours ? Number(logForm.sleepHours) : null,
+      waterIntake: logForm.waterIntake ? Number(logForm.waterIntake) : null,
+      stressLevel: logForm.stressLevel ? Number(logForm.stressLevel) : null,
+      mood: logForm.mood || null,
+      proteinConsumed: logForm.proteinConsumed ? Number(logForm.proteinConsumed) : null,
+      waistCircumference: logForm.waistCircumference ? Number(logForm.waistCircumference) : null,
     };
 
-    void fetchData();
-  }, []);
+    const backupLogs = logs;
+    setLogs((currentLogs) => {
+      const filteredLogs = currentLogs.filter((entry) => entry.date !== optimisticLog.date);
+      return [optimisticLog, ...filteredLogs];
+    });
+
+    try {
+      const response = await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logForm),
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao salvar o registro.');
+      }
+
+      await refresh();
+    } catch (cause) {
+      console.error(cause);
+      setLogs(backupLogs);
+      throw cause;
+    }
+  }
 
   return {
     settings,
@@ -98,5 +144,6 @@ export function useMetabolicData() {
     error,
     refresh,
     setError,
+    addLog,
   };
 }
