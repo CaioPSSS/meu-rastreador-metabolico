@@ -84,7 +84,12 @@ export default function MetabolicCharts({ logs, settings }: MetabolicChartsProps
   const slopeKgPerDay = calculateLinearSlope(weightPoints);
   const lastLogWithWeight = weightPoints[weightPoints.length - 1];
 
-  const predictiveData = orderedLogs.map((log, index) => ({
+  const predictiveData: Array<{
+    data: string;
+    'Peso Real': number | null;
+    'Peso EWMA': number | null;
+    'Projeção de Peso': number | null;
+  }> = orderedLogs.map((log, index) => ({
     data: log.date.substring(5).replace('-', '/'),
     'Peso Real': log.weight,
     'Peso EWMA': emaSeries[index],
