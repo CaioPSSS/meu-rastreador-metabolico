@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { Bell } from 'lucide-react';
 import OnboardingForm from './OnboardingForm';
 import DailyEntryForm from './DailyEntryForm';
 import MetabolicCharts from './MetabolicCharts';
@@ -38,6 +39,13 @@ const initialLogForm: LogFormState = {
   waistCircumference: '',
 };
 
+interface AiReportSummary {
+  id: string;
+  createdAt: string;
+  content: string;
+  isRead: boolean;
+}
+
 function average(values: number[]) {
   return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
@@ -53,6 +61,26 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const [logForm, setLogForm] = useState(initialLogForm);
   const [clientMessage, setClientMessage] = useState({ type: '', text: '' });
   const [isEditing, setIsEditing] = useState(false);
+  const [unreadReport, setUnreadReport] = useState<AiReportSummary | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    const loadUnreadReport = async () => {
+      try {
+        const response = await fetch('/api/reports/unread');
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setUnreadReport(data.report ?? null);
+      } catch (error) {
+        console.error('Falha ao buscar relatório não lido.', error);
+      }
+    };
+
+    void loadUnreadReport();
+  }, []);
 
   const recentLogs = logs.slice(0, 7);
   const recentWeights = recentLogs.map((log) => log.weight).filter((w): w is number => w !== null);
@@ -147,6 +175,22 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
     }
   };
 
+  const handleCloseReport = async () => {
+    if (!unreadReport) {
+      setShowModal(false);
+      return;
+    }
+
+    try {
+      await fetch(`/api/reports/${unreadReport.id}/read`, { method: 'POST' });
+    } catch (error) {
+      console.error('Falha ao marcar relatório como lido.', error);
+    } finally {
+      setShowModal(false);
+      setUnreadReport(null);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen text-xl">Carregando dados metabólicos...</div>;
   }
@@ -166,11 +210,47 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400">Metabolic Tracker</h1>
           <p className="text-slate-400 text-sm mt-1">Sincronização cross-device ativada na infraestrutura Vercel.</p>
         </div>
-        <div className="bg-slate-900/60 border border-slate-700/50 px-5 py-3 rounded-xl text-center">
-          <span className="text-xs uppercase text-slate-400 block tracking-wider">Meta Calórica Atual</span>
-          <span className="text-2xl font-black text-emerald-400">{settings.currentCalorieTarget} kcal</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => unreadReport && setShowModal(true)}
+            className="relative rounded-full border border-slate-700/70 bg-slate-900/70 p-3 text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300"
+            aria-label="Abrir relatório clínico"
+          >
+            <Bell className={`h-5 w-5 ${unreadReport ? 'animate-pulse' : ''}`} />
+            {unreadReport ? <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-rose-500" /> : null}
+          </button>
+          <div className="bg-slate-900/60 border border-slate-700/50 px-5 py-3 rounded-xl text-center">
+            <span className="text-xs uppercase text-slate-400 block tracking-wider">Meta Calórica Atual</span>
+            <span className="text-2xl font-black text-emerald-400">{settings.currentCalorieTarget} kcal</span>
+          </div>
         </div>
       </div>
+
+      {showModal && unreadReport ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">Análise Clínica Semanal</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-100">Relatório de recuperação e performance</h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReport}
+                className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+              >
+                Ciente. Fechar e Arquivar.
+              </button>
+            </div>
+            <div className="mt-5 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+              <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
+                {unreadReport.content}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
         <h2 className="text-lg font-bold text-slate-200 mb-4">💡 Insights Automáticos</h2>

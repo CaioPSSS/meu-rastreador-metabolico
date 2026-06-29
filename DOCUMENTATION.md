@@ -204,6 +204,15 @@ A interface principal foi expandida para incluir:
  - Foram adicionados `proteinConsumed` (Int?) e `waistCircumference` (Float?) ao modelo `DailyLog` para permitir insights de ingestão proteica e mudança de composição corporal.
  - Esses campos são opcionais e não quebram a janela de regressão do algoritmo; são usados para insights, não para o cálculo primário do TDEE adaptativo.
 
+### Sistema semanal de análise clínica com IA
+
+ - O projeto agora inclui um fluxo automático de análise semanal com Gemini, persistência em banco e notificações via WhatsApp/UI.
+ - O modelo `AiReport` foi adicionado ao schema do Prisma para armazenar os relatórios gerados.
+ - O endpoint `app/api/cron/ai-analysis/route.ts` valida um token `CRON_SECRET`, coleta os últimos 14 dias de `DailyLog`, gera um relatório com Gemini `gemini-1.5-flash` e salva o resultado como `AiReport`.
+ - O dashboard passou a exibir um sino de notificações que consulta `app/api/reports/unread/route.ts` e abre um modal com o conteúdo do relatório não lido.
+ - O fechamento do modal marca o relatório como lido via `app/api/reports/[id]/read/route.ts`.
+ - O cronograma no `vercel.json` dispara a análise semanal automaticamente.
+
 Se quiser, eu posso também gerar um trecho de `CHANGELOG.md` com o resumo dessas mudanças antes de você commitar e fazer o `prisma db push` no ambiente que tenha acesso ao banco.
 
 ---

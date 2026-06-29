@@ -37,3 +37,12 @@ model DailyLog {
 
   @@index([date(sort: Desc)])
 }
+
+model AiReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  content   String   @db.Text
+  isRead    Boolean  @default(false)
+
+  @@index([createdAt(sort: Desc)])
+}
