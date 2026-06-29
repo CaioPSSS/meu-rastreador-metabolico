@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { prisma } from '@/lib/prisma';
 
 export const maxDuration = 30;
@@ -28,9 +27,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Alterado para buscar a chave do OpenRouter
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Missing GEMINI_API_KEY' }, { status: 500 });
+      return NextResponse.json({ error: 'Missing OPENROUTER_API_KEY' }, { status: 500 });
     }
 
     const logs = await prisma.dailyLog.findMany({
@@ -52,14 +52,37 @@ export async function GET(request: NextRequest) {
 
     const prompt = `Analise a seguinte janela metabólica dos últimos 14 dias. Se algum dado estiver ausente, trate como lacuna e não invente valores.\n\n${JSON.stringify(leanPayload, null, 2)}`;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'models/gemini-3.1-pro-preview',
-      systemInstruction: SYSTEM_PROMPT,
+    // Requisição nativa via fetch utilizando a API compatível da OpenRouter
+    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        // Cabeçalhos opcionais de rastreio para os leaderboards do OpenRouter
+        'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app', 
+        'X-Title': 'Metabolic Tracker AI Cron'
+      },
+      body: JSON.stringify({
+        model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt }
+        ],
+      })
     });
 
-    const result = await model.generateContent(prompt);
-    const reportText = result.response.text();
+    if (!openRouterResponse.ok) {
+      const errorData = await openRouterResponse.text();
+      console.error('Erro na API do OpenRouter:', errorData);
+      return NextResponse.json({ error: 'Failed to generate content from OpenRouter' }, { status: 502 });
+    }
+
+    const result = await openRouterResponse.json();
+    const reportText = result.choices?.[0]?.message?.content;
+
+    if (!reportText) {
+      throw new Error('Formato de resposta inesperado retornado pelo OpenRouter.');
+    }
 
     await aiPrisma.aiReport.create({
       data: {
