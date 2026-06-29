@@ -57,6 +57,8 @@ Armazena a configuração clínica e a meta calórica atualizada pelo algoritmo.
 * `waterIntake`: `Int?` (Hidratação em ml).
 * `stressLevel`: `Int?` (Nível subjetivo de estresse de 1 a 5).
 * `mood`: `String?` (Humor diário: "Ótimo", "Bom", "Regular", "Ruim").
+* `proteinConsumed`: `Int?` (Proteína consumida em gramas, novo).
+* `waistCircumference`: `Float?` (Circunferência da cintura em cm, novo rastreador de composição).
 * `createdAt`: timestamp de criação.
 
 ### Regras de integridade importantes
@@ -82,20 +84,23 @@ Aplica-se o fator de atividade e soma-se o déficit/superávit do objetivo (assu
 
 ### Fase 2: Cálculo Empírico Adaptativo e Insights
 Quando a base de dados atinge **14 registros (2 semanas flutuantes)**, o algoritmo passa a ajustar a meta com base no comportamento real e nas tendências de progresso.
-1. Extrai a média de peso isolada da Semana 1 e da Semana 2, ignorando dias sem pesagem (`null`).
-2. Calcula o delta real de massa: `Variação_KG = Média_Semana_2 - Média_Semana_1`.
-3. Descobre o impacto energético real diário: `Delta_Energia = (Variação_KG * 7700) / 7`.
-4. Define o **TDEE Empírico**: `(Calorias_Ingeridas_Média - Delta_Energia) + Calorias_Gastas_Média`.
-5. Recalcula a nova meta aplicando o objetivo do usuário em cima deste TDEE.
-6. Aplica suavização e limites de mudança para evitar ajustes abruptos, permitindo variações de até 150 kcal a partir da meta atual.
-7. Se os dados estiverem insuficientes (menos de 3 pesos por semana ou menos de 10 dias de calorias registradas), mantém a meta atual sem recalcular.
-8. Gera insights automáticos a partir dos últimos 7 dias de registro, avaliando ingestão, sono, água, estresse e humor.
+1. Substitui o bloco rígido de semana 1 vs. semana 2 por uma regressão linear de pesos válidos nos últimos 14 a 21 dias.
+2. Calcula a inclinação da reta de mínimos quadrados para estimar a variação diária de peso (`kg/dia`), eliminando ruído de flutuações de glicogênio e água.
+3. Converte essa tendência em energia real: `Delta_Energia = (Trend_kg_per_day * 7700)`.
+4. Define o **TDEE Empírico** como `Calorias_Ingeridas_Média - Delta_Energia`.
+5. Usa `caloriesBurned` apenas para insights comportamentais e crédito dinâmico de exercício, não para o cálculo do TDEE basal adaptativo.
+6. Recalcula a nova meta aplicando o objetivo do usuário sobre esse TDEE empírico.
+7. Aplica suavização e limites de ajuste para evitar mudanças abruptas, permitindo variações de até 150 kcal da meta atual.
+8. Se os dados estiverem insuficientes (menos de 4 pesos válidos na janela ou menos de 10 dias de calorias registradas), mantém a meta atual sem recalcular.
+9. Gera insights automáticos a partir dos últimos 7 dias de registro, avaliando ingestão, sono, água, estresse, humor e proteína.
 
 O endpoint `/api/logs` retorna agora `{ logs, insights }`, e o front-end exibe recomendações semanais baseadas no estado atual do usuário.
 
 ### Regras de negócio do motor
 * Se há menos de 14 logs, a aplicação usa a meta inicial.
 * Se há 14 logs ou mais, a aplicação tenta recalcular com base em progresso real.
+* O TDEE empírico agora usa regressão linear de peso, não diferença de médias semanais.
+* `caloriesBurned` não é somado no cálculo do TDEE adaptativo; ele entra apenas em insights comportamentais.
 * Ajustes muito bruscos são evitados com suavização de 45%/55% e limite de variação de 150 kcal.
 * O algoritmo evita recalcular quando há poucos pesos válidos ou poucas entradas calóricas.
 
@@ -155,6 +160,7 @@ npm run build
 * `POSTGRES_URL_NON_POOLING` ausente → erro de validação do Prisma.
 * `prisma generate` não rodou → cliente desatualizado.
 * `next build` quebrando em `app/api/logs/route.ts` → confira se o schema do Prisma inclui os campos usados pelo backend.
+* `getYesterdayLocalISODate()` usa data local explicita para evitar erros de data em fusos horários diferentes, em vez de `toISOString()`.
 
 ---
 
@@ -172,6 +178,9 @@ A interface principal foi expandida para incluir:
 * Se o usuário marcar `Livre`, o app impede mais de um dia livre nos últimos 7 dias.
 * Os campos de peso, calorias e sono são opcionais, permitindo lacunas de registro.
 * O formulário de edição reaproveita os valores de um registro existente para correção.
+* `app/page.tsx` foi fragmentado em componentes menores: `OnboardingForm`, `DailyEntryForm`, `MetabolicCharts` e `RecentHistoryTable`.
+* A camada de dados foi isolada em `app/hooks/useMetabolicData.ts` para gerenciar `logs`, `settings`, `insights`, carregamento e erros.
+* Os gráficos de peso usam EMA (Média Móvel Exponencial) para reduzir o impacto de dias antigos e dar mais peso aos registros recentes.
 
 ---
 

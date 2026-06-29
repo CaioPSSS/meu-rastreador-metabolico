@@ -26,6 +26,35 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function parseIsoDate(date: string): Date {
+  return new Date(`${date}T00:00:00Z`);
+}
+
+export function calculateWeightTrend(logs: DailyLog[]): number {
+  const entries = logs
+    .filter((log) => log.weight !== null)
+    .map((log) => ({
+      x: parseIsoDate(log.date).getTime() / 86400000,
+      y: log.weight as number,
+    }));
+
+  if (entries.length < 2) {
+    return 0;
+  }
+
+  const xMean = average(entries.map((entry) => entry.x));
+  const yMean = average(entries.map((entry) => entry.y));
+
+  const numerator = entries.reduce((sum, entry) => sum + (entry.x - xMean) * (entry.y - yMean), 0);
+  const denominator = entries.reduce((sum, entry) => sum + Math.pow(entry.x - xMean, 2), 0);
+
+  if (denominator === 0) {
+    return 0;
+  }
+
+  return numerator / denominator;
+}
+
 function medianMood(logs: DailyLog[]) {
   const moodMap: Record<string, number> = {};
   logs.forEach((log) => {
@@ -43,29 +72,19 @@ export function recalculateAdaptiveTarget(logs: DailyLog[], settings: UserSettin
   const config = settings[0];
   const sortedLogs = [...logs].sort((a, b) => a.date.localeCompare(b.date));
   const last14Days = sortedLogs.slice(-14);
-
-  const week1 = last14Days.slice(0, 7);
-  const week2 = last14Days.slice(7, 14);
-
-  const w1Weights = week1.map((l) => l.weight).filter((w): w is number => w !== null);
-  const w2Weights = week2.map((l) => l.weight).filter((w): w is number => w !== null);
+  const recentWeightWindow = sortedLogs.slice(-21);
 
   const calories = last14Days.map((l) => l.caloriesConsumed).filter((c): c is number => c !== null);
-  const exercise = last14Days.map((l) => l.caloriesBurned).filter((e): e is number => e !== null);
+  const validWeightEntries = recentWeightWindow.filter((l) => l.weight !== null);
 
-  if (w1Weights.length < 3 || w2Weights.length < 3 || calories.length < 10) {
+  if (validWeightEntries.length < 4 || calories.length < 10) {
     return config.currentCalorieTarget;
   }
 
-  const avgWeightWeek1 = average(w1Weights);
-  const avgWeightWeek2 = average(w2Weights);
-  const weightChange = avgWeightWeek2 - avgWeightWeek1;
-
+  const weightTrendKgPerDay = calculateWeightTrend(recentWeightWindow);
   const avgCaloriesIn = average(calories);
-  const avgCaloriesBurned = exercise.length > 0 ? average(exercise) : 0;
-
-  const realDailyEnergyDelta = (weightChange * 7700) / 7;
-  const empiricalTDEE = avgCaloriesIn - realDailyEnergyDelta + avgCaloriesBurned;
+  const realDailyEnergyDelta = weightTrendKgPerDay * 7700;
+  const empiricalTDEE = avgCaloriesIn - realDailyEnergyDelta;
 
   const targetedChangeDelta = (config.weeklyRate * 7700) / 7;
   const rawTarget = empiricalTDEE + targetedChangeDelta;
@@ -74,7 +93,7 @@ export function recalculateAdaptiveTarget(logs: DailyLog[], settings: UserSettin
   const maxShift = 150;
   const adjustedTarget = clamp(smoothedTarget, config.currentCalorieTarget - maxShift, config.currentCalorieTarget + maxShift);
 
-  if (Math.abs(weightChange) < 0.15 && Math.abs(avgCaloriesIn - config.currentCalorieTarget) < 100) {
+  if (Math.abs(weightTrendKgPerDay * 7) < 0.15 && Math.abs(avgCaloriesIn - config.currentCalorieTarget) < 100) {
     return config.currentCalorieTarget;
   }
 
@@ -90,10 +109,11 @@ export function generateInsights(logs: DailyLog[], settings: UserSettings[]): st
   const recent = [...logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
 
   const weekCalories = recent.map((l) => l.caloriesConsumed).filter((c): c is number => c !== null);
-  const weekExercise = recent.map((l) => l.caloriesBurned).filter((e): e is number => e !== null);
   const weekSleep = recent.map((l) => l.sleepHours).filter((s): s is number => s !== null);
   const weekWater = recent.map((l) => l.waterIntake).filter((w): w is number => w !== null);
   const weekStress = recent.map((l) => l.stressLevel).filter((s): s is number => s !== null);
+  const weekProtein = recent.map((l) => l.proteinConsumed).filter((p): p is number => p !== null);
+  const weekWeights = recent.map((l) => l.weight).filter((w): w is number => w !== null);
 
   const insights: string[] = [];
 
@@ -105,6 +125,17 @@ export function generateInsights(logs: DailyLog[], settings: UserSettings[]): st
       insights.push('A ingestão média está abaixo da meta. Atenção para não reduzir demais se houver desconforto.');
     } else {
       insights.push('A ingestão calórica média está alinhada com a meta atual.');
+    }
+  }
+
+  if (weekProtein.length >= 3 && weekWeights.length >= 2) {
+    const avgProtein = average(weekProtein);
+    const avgWeight = average(weekWeights);
+    const proteinPerKg = avgProtein / avgWeight;
+    if (proteinPerKg < 1.6) {
+      insights.push('Sua ingestão de proteína está abaixo de 1.6g/kg. Risco maior de perda de massa magra em dietas com treino intenso.');
+    } else {
+      insights.push('A ingestão proteica está adequada para preservar massa magra.');
     }
   }
 

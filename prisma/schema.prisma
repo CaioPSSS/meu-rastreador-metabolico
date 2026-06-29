@@ -31,5 +31,7 @@ model DailyLog {
                   waterIntake      Int?     // Água ingerida em ml
                     stressLevel      Int?     // Nível subjetivo de estresse 1-5
                       mood             String?  // Humor diário
+                      proteinConsumed Int?     // Proteína consumida em gramas
+                      waistCircumference Float? // Circunferência da cintura em cm
                         createdAt        DateTime @default(now())
 }
