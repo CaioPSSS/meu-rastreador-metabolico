@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-pro-latest',
+      model: 'models/gemini-3.1-pro-preview',
       systemInstruction: SYSTEM_PROMPT,
     });
 
