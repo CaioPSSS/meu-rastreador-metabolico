@@ -2,11 +2,15 @@ import DashboardClient from './components/DashboardClient';
 import { prisma } from '@/lib/prisma';
 import { generateInsights } from '@/lib/metabolicAlgo';
 
+// Desativa o cache estático do Next.js para esta rota inteira
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   const [settings, logs] = await Promise.all([
     prisma.userSettings.findUnique({ where: { id: 'singleton' } }),
     prisma.dailyLog.findMany({ orderBy: { date: 'desc' }, take: 30 }),
   ]);
+  
   const fullLogs = logs.map((log) => {
     const asAny = log as any;
     return {
