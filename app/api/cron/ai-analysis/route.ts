@@ -88,14 +88,14 @@ export async function GET(request: NextRequest) {
 
     const settingsPayload = settings
       ? {
-          age: settings.age,
-          height: settings.height,
-          gender: settings.gender,
-          activityLevel: settings.activityLevel,
-          goal: settings.goal,
-          weeklyRate: settings.weeklyRate,
-          currentCalorieTarget: settings.currentCalorieTarget,
-        }
+        age: settings.age,
+        height: settings.height,
+        gender: settings.gender,
+        activityLevel: settings.activityLevel,
+        goal: settings.goal,
+        weeklyRate: settings.weeklyRate,
+        currentCalorieTarget: settings.currentCalorieTarget,
+      }
       : null;
 
     const prompt = `Analise a seguinte janela metabólica das últimas 2 semanas. Envie todas as variáveis disponíveis do histórico e as variáveis de configuração/meta do usuário. Se algum dado estiver ausente, trate como lacuna e não invente valores.\n\nHistórico das últimas 2 semanas:\n${JSON.stringify(leanPayload, null, 2)}\n\nConfiguração e meta do usuário:\n${JSON.stringify(settingsPayload, null, 2)}`;
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         // Cabeçalhos opcionais de rastreio para os leaderboards do OpenRouter
-        'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app', 
+        'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app',
         'X-Title': 'Metabolic Tracker AI Cron'
       },
       body: JSON.stringify({
@@ -140,13 +140,12 @@ export async function GET(request: NextRequest) {
 
     // OpenRouter pode retornar 200 com um campo de erro no corpo
     if (result.error) {
-      console.error('Erro embutido na resposta do OpenRouter:', JSON.stringify(result.error));
-      throw new Error(`OpenRouter retornou erro: ${result.error.message || JSON.stringify(result.error)}`);
+      console.warn('Erro embutido na resposta do OpenRouter (tentando fallback):', JSON.stringify(result.error));
     }
 
-    let reportText = result.choices?.[0]?.message?.content;
+    let reportText = result.error ? null : result.choices?.[0]?.message?.content;
 
-    // Se o modelo principal não retornou conteúdo, tenta um modelo de fallback
+    // Se o modelo principal não retornou conteúdo (ou retornou erro), tenta um modelo de fallback
     if (!reportText) {
       console.warn('Modelo primário não retornou conteúdo. Tentando modelo de fallback...');
 
@@ -159,7 +158,7 @@ export async function GET(request: NextRequest) {
           'X-Title': 'Metabolic Tracker AI Cron (Fallback)',
         },
         body: JSON.stringify({
-          model: 'google/gemma-3-27b-it:free',
+          model: 'google/gemma-4-31b-it:free',
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: prompt },
