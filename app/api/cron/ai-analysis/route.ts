@@ -7,7 +7,7 @@ const aiPrisma = prisma as typeof prisma & { aiReport: any };
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um fisiologista esportivo de elite e cientista de dados. Sua análise deve ser fria, realista e estritamente baseada em termodinâmica e fisiologia do exercício. Zero condescendência ou motivação vazia. Vá direto aos números e fatos.
 
-CONTEXTO: Indivíduo sob alto estresse crônico (internato médico, plantões, privação de sono, horas em pé) conciliando treino híbrido pesado (musculação periodizada + corrida de longa distância).
+CONTEXTO: Indivíduo com foco em perda de gordura, mantendo massa magra, praticando treino híbrido (musculação + cardio) e monitorando métricas metabólicas diárias (peso, ingestão calórica, ingestão proteica, sono e estresse).
 
 DIRETRIZES DE FORMATAÇÃO (Otimizado para WhatsApp):
 - Seja ultra direto. Sem introduções polidas, saudações ou encerramentos longos.
@@ -16,13 +16,20 @@ DIRETRIZES DE FORMATAÇÃO (Otimizado para WhatsApp):
 - Use emojis APENAS como ícones estruturais para organizar os tópicos (ex: 📊, 🥩, ⚠️, 🎯).
 
 ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
-📊 *Termodinâmica:* Avalie a reta de tendência real de peso vs. déficit acumulado (filtre o ruído de retenção de fluidos e glicogênio).
-🥩 *Composição:* Julgue o aporte proteico e o risco de catabolismo frente ao desgaste do treino híbrido.
-⚠️ *Sinal Clínico:* Correlacione o estresse/sono do hospital com possíveis estagnações (retenção hídrica por cortisol).
+📊 *Termodinâmica:* Avalie a reta de tendência real de peso vs. déficit acumulado (filtre o ruído de retenção de fluidos e glicogênio), primeiro focando no desempenho da semana e depois no desempenho acumulado.
+🥩 *Composição:* Julgue o aporte proteico e o risco de catabolismo frente ao desgaste do treino apresentado.
+⚠️ *Sinal Clínico:* Correlacione o estresse/sono com possíveis estagnações (retenção hídrica por cortisol).
 🎯 *Plano de Ação:* Forneça exatamente 3 diretrizes táticas, milimétricas e de alta eficiência para corrigir a rota na próxima semana.`;
 
 // Captura a variável de ambiente, ou usa o padrão se estiver vazia
 const SYSTEM_PROMPT = process.env.AI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT;
+
+function splitReportParagraphs(reportText: string): string[] {
+  return reportText
+    .split(/\r?\n\s*\r?\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,19 +51,54 @@ export async function GET(request: NextRequest) {
       take: 14,
     });
 
+    const settings = await prisma.userSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+
     const leanPayload = logs
       .slice()
       .reverse()
-      .map((log) => ({
+      .map((log: {
+        date: string | Date;
+        weight: number | null;
+        caloriesConsumed: number | null;
+        caloriesBurned: number | null;
+        trainingType: string;
+        sleepHours: number | null;
+        waterIntake: number | null;
+        stressLevel: number | null;
+        mood: string | null;
+        proteinConsumed: number | null;
+        waistCircumference: number | null;
+        createdAt: Date;
+      }) => ({
         date: typeof log.date === 'string' ? log.date.slice(0, 10) : new Date(log.date).toISOString().slice(0, 10),
         weight: log.weight ?? null,
         caloriesConsumed: log.caloriesConsumed ?? null,
-        proteinConsumed: log.proteinConsumed ?? null,
+        caloriesBurned: log.caloriesBurned ?? null,
+        trainingType: log.trainingType ?? null,
         sleepHours: log.sleepHours ?? null,
+        waterIntake: log.waterIntake ?? null,
         stressLevel: log.stressLevel ?? null,
+        mood: log.mood ?? null,
+        proteinConsumed: log.proteinConsumed ?? null,
+        waistCircumference: log.waistCircumference ?? null,
+        createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : null,
       }));
 
-    const prompt = `Analise a seguinte janela metabólica dos últimos 14 dias. Se algum dado estiver ausente, trate como lacuna e não invente valores.\n\n${JSON.stringify(leanPayload, null, 2)}`;
+    const settingsPayload = settings
+      ? {
+          age: settings.age,
+          height: settings.height,
+          gender: settings.gender,
+          activityLevel: settings.activityLevel,
+          goal: settings.goal,
+          weeklyRate: settings.weeklyRate,
+          currentCalorieTarget: settings.currentCalorieTarget,
+        }
+      : null;
+
+    const prompt = `Analise a seguinte janela metabólica das últimas 2 semanas. Envie todas as variáveis disponíveis do histórico e as variáveis de configuração/meta do usuário. Se algum dado estiver ausente, trate como lacuna e não invente valores.\n\nHistórico das últimas 2 semanas:\n${JSON.stringify(leanPayload, null, 2)}\n\nConfiguração e meta do usuário:\n${JSON.stringify(settingsPayload, null, 2)}`;
 
     // Requisição nativa via fetch utilizando a API compatível da OpenRouter
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -101,11 +143,15 @@ export async function GET(request: NextRequest) {
     const callMeBotKey = process.env.CALLMEBOT_API_KEY;
 
     if (whatsappNumber && callMeBotKey) {
-      const whatsappUrl = `https://api.callmebot.com/whatsapp.php?phone=${whatsappNumber}&text=${encodeURIComponent(reportText)}&apikey=${callMeBotKey}`;
-      try {
-        await fetch(whatsappUrl);
-      } catch (notificationError) {
-        console.error('Falha ao enviar notificação por WhatsApp.', notificationError);
+      const whatsappParagraphs = splitReportParagraphs(reportText);
+
+      for (const paragraph of whatsappParagraphs) {
+        const whatsappUrl = `https://api.callmebot.com/whatsapp.php?phone=${whatsappNumber}&text=${encodeURIComponent(paragraph)}&apikey=${callMeBotKey}`;
+        try {
+          await fetch(whatsappUrl);
+        } catch (notificationError) {
+          console.error('Falha ao enviar notificação por WhatsApp.', notificationError);
+        }
       }
     }
 
