@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export const maxDuration = 30;
+export const maxDuration = 300;
 
 const aiPrisma = prisma as typeof prisma & { aiReport: any };
 
