@@ -126,10 +126,74 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await openRouterResponse.json();
-    const reportText = result.choices?.[0]?.message?.content;
+
+    // Log para diagnóstico — ajuda a depurar respostas inesperadas
+    console.log('Resposta do OpenRouter (resumo):', JSON.stringify({
+      id: result.id,
+      model: result.model,
+      hasChoices: Array.isArray(result.choices),
+      choicesLength: result.choices?.length,
+      finishReason: result.choices?.[0]?.finish_reason,
+      contentLength: result.choices?.[0]?.message?.content?.length ?? 0,
+      error: result.error ?? null,
+    }));
+
+    // OpenRouter pode retornar 200 com um campo de erro no corpo
+    if (result.error) {
+      console.error('Erro embutido na resposta do OpenRouter:', JSON.stringify(result.error));
+      throw new Error(`OpenRouter retornou erro: ${result.error.message || JSON.stringify(result.error)}`);
+    }
+
+    let reportText = result.choices?.[0]?.message?.content;
+
+    // Se o modelo principal não retornou conteúdo, tenta um modelo de fallback
+    if (!reportText) {
+      console.warn('Modelo primário não retornou conteúdo. Tentando modelo de fallback...');
+
+      const fallbackResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app',
+          'X-Title': 'Metabolic Tracker AI Cron (Fallback)',
+        },
+        body: JSON.stringify({
+          model: 'google/gemma-3-27b-it:free',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+
+      if (!fallbackResponse.ok) {
+        const fallbackError = await fallbackResponse.text();
+        console.error('Erro no modelo de fallback do OpenRouter:', fallbackError);
+        throw new Error('Ambos os modelos (primário e fallback) falharam ao gerar conteúdo.');
+      }
+
+      const fallbackResult = await fallbackResponse.json();
+      console.log('Resposta do fallback (resumo):', JSON.stringify({
+        id: fallbackResult.id,
+        model: fallbackResult.model,
+        hasChoices: Array.isArray(fallbackResult.choices),
+        contentLength: fallbackResult.choices?.[0]?.message?.content?.length ?? 0,
+        error: fallbackResult.error ?? null,
+      }));
+
+      if (fallbackResult.error) {
+        throw new Error(`Fallback retornou erro: ${fallbackResult.error.message || JSON.stringify(fallbackResult.error)}`);
+      }
+
+      reportText = fallbackResult.choices?.[0]?.message?.content;
+    }
 
     if (!reportText) {
-      throw new Error('Formato de resposta inesperado retornado pelo OpenRouter.');
+      throw new Error(
+        'Formato de resposta inesperado: nenhum modelo retornou conteúdo. ' +
+        `Resposta primária: ${JSON.stringify(result).slice(0, 300)}`
+      );
     }
 
     await aiPrisma.aiReport.create({
