@@ -46,7 +46,7 @@ export default function RecentHistoryTable({ logs, onEditLog }: RecentHistoryTab
               // Calcula delta de peso em relação ao log anterior na série (que é o log[index + 1])
               const prevLog = logs[index + 1];
               let weightDelta: number | null = null;
-              if (log.weight !== null && prevLog?.weight !== null) {
+              if (log.weight !== null && prevLog && prevLog.weight !== null) {
                 weightDelta = parseFloat((log.weight - prevLog.weight).toFixed(1));
               }
 
