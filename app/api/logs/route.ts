@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generateInsights, recalculateAdaptiveTarget } from '@/lib/metabolicAlgo';
+import { generateInsights, recalculateAdaptiveTarget, shouldRecalculate } from '@/lib/metabolicAlgo';
 
 export async function GET() {
   const logs = await prisma.dailyLog.findMany({
@@ -66,14 +66,24 @@ export async function POST(request: Request) {
 
   const settings = await prisma.userSettings.findMany();
 
+  // Gate semanal: só recalcula a meta se passaram >= 7 dias e há >= 4 pesagens
+  // Isso resolve a oscilação diária causada por flutuações de retenção hídrica.
   if (allLogsForCalculation.length >= 14 && settings.length > 0) {
-    const newTarget = recalculateAdaptiveTarget(allLogsForCalculation, settings);
-    await prisma.userSettings.update({
-      where: { id: 'singleton' },
-      data: { currentCalorieTarget: newTarget },
-    });
+    const gate = shouldRecalculate(settings[0], allLogsForCalculation);
+
+    if (gate.allowed) {
+      const newTarget = recalculateAdaptiveTarget(allLogsForCalculation, settings);
+      await prisma.userSettings.update({
+        where: { id: 'singleton' },
+        data: {
+          currentCalorieTarget: newTarget,
+          lastRecalcAt: new Date(),
+          recalcReason: gate.reason,
+        },
+      });
+    }
+    // Se gate.allowed === false, a meta permanece inalterada até a próxima janela
   }
 
   return NextResponse.json({ success: true });
 }
-                                                                                                                                                      

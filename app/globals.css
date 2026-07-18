@@ -1,26 +1,119 @@
 @import "tailwindcss";
 
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Fundos */
+  --bg-base:       #080d1a;   /* azul-marinho escuro — fundo principal */
+  --bg-surface:    #0f172a;   /* surface de cards */
+  --bg-elevated:   #1e293b;   /* inputs, tabela header */
+
+  /* Bordas */
+  --border-subtle:         rgba(148, 163, 184, 0.10);
+  --border-glow-emerald:   rgba(52,  211, 153, 0.28);
+  --border-glow-sky:       rgba(56,  189, 248, 0.28);
+  --border-glow-violet:    rgba(167, 139, 250, 0.28);
+  --border-glow-cyan:      rgba(34,  211, 238, 0.28);
+  --border-glow-amber:     rgba(251, 191, 36,  0.28);
+  --border-glow-rose:      rgba(251, 113, 133, 0.28);
+
+  /* Fontes */
+  --font-sans: var(--font-geist-sans, 'Inter', system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, 'Fira Code', monospace);
 }
 
+/* ── Tema Inline (Tailwind v4) ─────────────────────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg-base);
+  --color-foreground: #e2e8f0;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ── Body / Base ───────────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-base);
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Textura sutil para evitar fundo "chapado" */
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* ── Scrollbar (webkit) ────────────────────────────────────────────────────── */
+::-webkit-scrollbar               { width: 6px; height: 6px; }
+::-webkit-scrollbar-track         { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb         { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover   { background: #475569; }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: #334155 var(--bg-surface); }
+
+/* ── Animações ─────────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes calBarGrow {
+  from { width: 0%; }
+  to   { width: var(--bar-width, 0%); }
+}
+
+@keyframes softPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-soft-pulse {
+  animation: softPulse 2s ease-in-out infinite;
+}
+
+/* ── Utilitário: Glassmorphism card ────────────────────────────────────────── */
+.glass-card {
+  background: rgba(15, 23, 42, 0.60);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.5rem;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-1px) scale(1.005);
+}
+
+/* ── Collapse section ──────────────────────────────────────────────────────── */
+.collapse-section {
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity     0.3s ease;
+}
+
+.collapse-section.closed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapse-section.open {
+  max-height: 600px;
+  opacity: 1;
 }

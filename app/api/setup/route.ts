@@ -32,6 +32,8 @@ export async function POST(request: Request) {
       goal,
       weeklyRate: Number(weeklyRate),
       currentCalorieTarget: initialTarget,
+      lastRecalcAt: new Date(),
+      recalcReason: 'initial',
     },
     create: {
       id: 'singleton',
@@ -42,6 +44,8 @@ export async function POST(request: Request) {
       goal,
       weeklyRate: Number(weeklyRate),
       currentCalorieTarget: initialTarget,
+      lastRecalcAt: new Date(),
+      recalcReason: 'initial',
     },
   });
 

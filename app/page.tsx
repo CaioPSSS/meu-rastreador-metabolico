@@ -28,7 +28,12 @@ export default async function Home() {
     };
   });
 
+  const formattedSettings = settings ? {
+    ...settings,
+    lastRecalcAt: settings.lastRecalcAt?.toISOString() || null,
+  } : null;
+
   const insights = generateInsights(logs, settings ? [settings] : []);
 
-  return <DashboardClient initialSettings={settings} initialLogs={fullLogs} initialInsights={insights} />;
+  return <DashboardClient initialSettings={formattedSettings} initialLogs={fullLogs} initialInsights={insights} />;
 }

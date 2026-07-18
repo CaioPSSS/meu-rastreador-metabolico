@@ -17,8 +17,10 @@ model UserSettings {
                 goal                 String   // "loss" (perder), "maintenance" (manter), "gain" (ganhar)
                   weeklyRate           Float    // Kg por semana (ex: -0.5 para perder 500g)
                     currentCalorieTarget Int
-                      createdAt            DateTime @default(now())
-                        updatedAt            DateTime @updatedAt
+      lastRecalcAt         DateTime? // Quando a meta calórica foi ajustada pela última vez
+        recalcReason         String?   // Motivo do ajuste (ex: "weekly_cycle", "ai_decision", "initial")
+          createdAt            DateTime @default(now())
+            updatedAt            DateTime @updatedAt
 }
 
 model DailyLog {
@@ -43,6 +45,13 @@ model AiReport {
   createdAt DateTime @default(now())
   content   String   @db.Text
   isRead    Boolean  @default(false)
+
+  // Memória acumulativa — alimenta o contexto de prompts futuros
+  weekSummary     Json?  // WeekSummary: snapshot das métricas da semana
+  recommendations Json?  // String[]: diretrizes táticas extraídas do relatório
+
+  // Decisão de recalibração — rastreabilidade e exibição no dashboard
+  recalibration   Json?  // RecalibrationResult: decisão da IA árbitro + reasoning
 
   @@index([createdAt(sort: Desc)])
 }

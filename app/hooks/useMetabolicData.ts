@@ -22,6 +22,8 @@ export interface Settings {
   height: number;
   goal: string;
   weeklyRate: number;
+  lastRecalcAt: string | null;   // ISO timestamp do último recálculo
+  recalcReason: string | null;   // 'weekly_cycle' | 'ai_decision' | 'initial'
 }
 
 export interface SetupFormState {

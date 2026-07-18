@@ -54,14 +54,17 @@ A aplicação atual possui quatro eixos centrais:
 
 - [app/hooks/useMetabolicData.ts](app/hooks/useMetabolicData.ts): hook central para sincronizar settings, logs, insights, loading e erro.
 - [lib/dateUtils.ts](lib/dateUtils.ts): utilitários para manipulação de datas e compatibilidade com fusos.
-- [lib/metabolicAlgo.ts](lib/metabolicAlgo.ts): motor metabólico com heurística inicial, recalculação adaptativa e geração de insights.
+- [lib/metabolicAlgo.ts](lib/metabolicAlgo.ts): motor metabólico com heurística inicial, EWMA, gate semanal e geração de insights.
+- [lib/motorSignals.ts](lib/motorSignals.ts): cálculo determinístico de sinais do motor (TDEE empírico, tendência EWMA, compliance calórico, confidence level) e construção do WeekSummary.
+- [lib/recalibrationService.ts](lib/recalibrationService.ts): lógica da IA árbitro (chamada à OpenRouter, validação aritmética server-side, aplicação atômica da decisão).
 - [lib/prisma.ts](lib/prisma.ts): instância singleton do Prisma Client.
 
 ### API Routes
 
 - [app/api/logs/route.ts](app/api/logs/route.ts): leitura e gravação de logs diários.
 - [app/api/setup/route.ts](app/api/setup/route.ts): onboarding e persistência de UserSettings.
-- [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts): execução semanal da análise IA.
+- [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts): pipeline semanal completo (recalibração IA + relatório narrativo + WhatsApp).
+- [app/api/ai/recalibrate/route.ts](app/api/ai/recalibrate/route.ts): gatilho manual de recalibração (POST, autenticado por CRON_SECRET).
 - [app/api/reports/unread/route.ts](app/api/reports/unread/route.ts): consulta do relatório não lido mais recente.
 - [app/api/reports/[id]/read/route.ts](app/api/reports/[id]/read/route.ts): marca um relatório como lido.
 
@@ -84,6 +87,8 @@ Campos:
 - goal: `loss`, `maintenance` ou `gain`
 - weeklyRate: progresso esperado por semana
 - currentCalorieTarget: meta atual recalculada pelo motor
+- lastRecalcAt: DateTime opcional — quando a meta foi ajustada pela última vez (gate semanal)
+- recalcReason: String opcional — motivo do ajuste (`initial`, `weekly_cycle`, `ai_decision`)
 - createdAt / updatedAt: auditoria
 
 ### 3.2 DailyLog
@@ -139,11 +144,13 @@ Enquanto há poucos registros, a aplicação usa uma estimativa inicial baseada 
 Quando há 14 ou mais logs, o sistema tenta recalcular a meta com base em tendência real de peso e ingestão.
 
 Regras importantes:
-- O cálculo usa regressão linear de pesos válidos.
-- O algoritmo tenta filtrar ruído hídrico e de glicogênio.
-- O déficit acumulado é usado como sinal termodinâmico.
-- `caloriesBurned` não entra no cálculo principal de TDEE adaptativo; é usado principalmente como contexto comportamental.
-- Ajustes bruscos são amortecidos.
+- **Gate semanal**: a meta só recalcula se passaram >= 7 dias desde o último recálculo (`lastRecalcAt`) E há >= 4 pesagens válidas nos últimos 14 dias. Isso elimina a oscilação diária causada por flutuações de retenção hídrica.
+- **EWMA**: o cálculo usa Média Móvel Exponencialmente Ponderada (alpha=0.2, janela efetiva ~9 dias) em vez de regressão linear OLS simples. Pondera dias recentes com mais peso e filtra outliers de curto prazo.
+- **Constante de energia mista**: usa 6200 kcal/kg (em vez de 7700 kcal/kg) para conversão entre mudança de peso e energia — mais realista para tecido misto (gordura + glicogênio + água estrutural).
+- **`caloriesBurned` como contexto direcional**: incorporado com fator 0.15 (conservador) apenas em dias de treino efetivo. Wearables têm erro médio de 25-40%; o fator 0.15 o trata como sinal direcional, não como dado preciso.
+- **Suavização 50/50**: o novo alvo é 50% do valor atual + 50% do sinal novo (mais conservador que o anterior 45/55).
+- **Variação máxima por ciclo**: ±200 kcal (aumentado de 150 para permitir correções reais quando necessário).
+- **Zona de estabilidade**: critério OR — se tendência semanal < 100g **OU** compliance calórico < 80 kcal → manter meta. Antes era AND duplo, raramente ativado.
 
 ### 4.3 Geração de insights
 
@@ -186,15 +193,27 @@ O dashboard exibe:
 
 Esses gráficos usam Recharts e consomem os dados já carregados pelo hook.
 
-### 5.4 Fluxo de análise semanal com IA
+### 5.4 Fluxo de análise semanal com IA (Pipeline de 5 steps)
 
-1. O cron job do Vercel dispara [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts).
-2. O endpoint valida um token `CRON_SECRET`.
-3. Busca os últimos 14 registros de DailyLog.
-4. Formata um payload enxuto e envia para o Gemini `gemini-1.5-flash`.
-5. Cria um registro em AiReport.
-6. Tenta enviar a mensagem por WhatsApp via CallMeBot.
-7. O dashboard consulta os relatórios não lidos e exibe o modal de notificação.
+1. **Step 1** — O cron do Vercel dispara [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts) todo domingo às 20h.
+2. **Step 2** — Motor determinístico calcula sinais (TDEE empírico, tendência EWMA, compliance calórico) e determina o `confidence level` com base na qualidade dos dados.
+3. **Step 3** — IA Árbitro ([lib/recalibrationService.ts](lib/recalibrationService.ts)) decide se a meta deve mudar:
+   - Se `confidence === 'low'`: IA não é chamada, meta mantida.
+   - Se `confidence >= 'medium'`: IA recebe sinais + histórico das últimas 3 semanas e responde com `{ shouldAdjust, newTarget, delta, reasoning }`.
+   - Validação aritmética server-side: clamp [1200, 5000], delta máximo ±200 kcal.
+   - Se válido e `shouldAdjust`: atualiza `UserSettings.currentCalorieTarget` e `recalcReason = 'ai_decision'`.
+4. **Step 4** — IA Narrativo gera relatório clínico semanal com a decisão de meta incluída na seção `⚙️ Decisão de Meta:`.
+5. **Step 5** — Cria registro em `AiReport` com `weekSummary`, `recommendations` e `recalibration`.
+6. **Step 6** — Envia o relatório por WhatsApp via CallMeBot.
+7. O dashboard consulta os relatórios não lidos e exibe o modal.
+
+### 5.5 Recalibração manual
+
+O endpoint `POST /api/ai/recalibrate` permite acionar os Steps 2+3 sob demanda:
+```bash
+curl -X POST https://meu-rastreador-metabolico.vercel.app/api/ai/recalibrate \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
 
 ---
 

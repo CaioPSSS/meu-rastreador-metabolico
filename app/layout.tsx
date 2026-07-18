@@ -1,18 +1,22 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
+import type { Metadata } from 'next';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+  display: 'swap',
+});
 
-export const metadata = {
-  title: 'Rastreador Metabólico Inteligente',
-    description: 'Acompanhamento adaptativo de peso e calorias',
-    };
+export const metadata: Metadata = {
+  title: 'Metabolic Tracker — Controle Metabólico Adaptativo',
+  description: 'Rastreamento adaptativo de peso, calorias e composição corporal com motor híbrido determinístico + IA.',
+};
 
-    export default function RootLayout({ children }: { children: React.ReactNode }) {
-      return (
-          <html lang="pt-BR">
-                <body className={`${inter.className} bg-slate-900 text-slate-100 min-h-screen`}>{children}</body>
-                    </html>
-                      );
-                      }
-                      
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="pt-BR" className={inter.variable}>
+      <body className="min-h-screen antialiased">{children}</body>
+    </html>
+  );
+}
