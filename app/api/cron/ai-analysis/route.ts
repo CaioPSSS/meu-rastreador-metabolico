@@ -71,7 +71,7 @@ async function callOpenRouterNarrative(
       'X-Title': 'Metabolic Tracker AI Cron',
     },
     body: JSON.stringify({
-      model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      model: 'deepseek/deepseek-v4-flash',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -102,7 +102,7 @@ async function callOpenRouterNarrative(
       'X-Title': 'Metabolic Tracker AI Cron (Fallback)',
     },
     body: JSON.stringify({
-      model: 'google/gemma-4-31b-it:free',
+      model: 'tencent/hy3-preview',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

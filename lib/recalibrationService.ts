@@ -88,7 +88,7 @@ async function callOpenRouter(
       'X-Title': 'Metabolic Tracker Recalibration',
     },
     body: JSON.stringify({
-      model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      model: 'deepseek/deepseek-v4-flash',
       messages: [
         { role: 'system', content: ARBITER_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -113,7 +113,7 @@ async function callOpenRouter(
       'X-Title': 'Metabolic Tracker Recalibration (Fallback)',
     },
     body: JSON.stringify({
-      model: 'google/gemma-4-31b-it:free',
+      model: 'tencent/hy3-preview',
       messages: [
         { role: 'system', content: ARBITER_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
