@@ -6,6 +6,7 @@ import OnboardingForm from './OnboardingForm';
 import DailyEntryForm from './DailyEntryForm';
 import MetabolicCharts from './MetabolicCharts';
 import RecentHistoryTable from './RecentHistoryTable';
+import MealTracker from './meals/MealTracker';
 import { useMetabolicData, Log, Settings, LogFormState, SetupFormState } from '@/app/hooks/useMetabolicData';
 import { getYesterdayLocalISODate } from '@/lib/dateUtils';
 import { average, calcStreak, clamp, CALORIE_COMPLIANCE_MARGIN } from '@/lib/chartUtils';
@@ -437,6 +438,15 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
           </div>
         </section>
       )}
+
+      {/* ── Seção de Refeições & Alimentos ─────────────────────────────────── */}
+      <MealTracker
+        selectedDate={logForm.date || getYesterdayLocalISODate()}
+        onDateChange={(newDate) => setLogForm((prev) => ({ ...prev, date: newDate }))}
+        calorieTarget={settings.currentCalorieTarget}
+        userWeight={latestLog?.weight ?? null}
+        onMealsUpdated={refresh}
+      />
 
       {/* ── Grid Principal: Formulário + Gráficos ──────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">

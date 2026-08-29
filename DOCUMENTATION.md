@@ -42,9 +42,18 @@ A aplicação atual possui quatro eixos centrais:
 ## 🗂️ 2. Mapa de arquivos e responsabilidades
 
 ### Front-end
-
+ 
 - [app/page.tsx](app/page.tsx): Server Component que carrega dados iniciais via Prisma e passa props para o dashboard cliente.
 - [app/components/DashboardClient.tsx](app/components/DashboardClient.tsx): componente principal do dashboard. Gerencia estado da UI, notificações, modal de relatório e envio do formulário diário.
+- [app/components/meals/MealTracker.tsx](app/components/meals/MealTracker.tsx): painel principal de rastreamento de refeições e macros com seletor de datas.
+- [app/components/meals/MealCard.tsx](app/components/meals/MealCard.tsx): card individual de cada refeição com lista de itens, atalhos de adição e edição inline de gramas/macros.
+- [app/components/meals/MacroSummaryBar.tsx](app/components/meals/MacroSummaryBar.tsx): barras de progresso calórico e distribuição dos 3 macros (%P, %C, %G).
+- [app/components/meals/MealVisionModal.tsx](app/components/meals/MealVisionModal.tsx): modal de estimativa física e volumétrica do prato por foto e IA (OpenRouter), com ajuste interativo de gramas e margem informativa.
+- [app/components/meals/FoodSearchModal.tsx](app/components/meals/FoodSearchModal.tsx): modal de busca inteligente (TACO + custom) com seletor de peso proporcional.
+- [app/components/meals/BarcodeScannerModal.tsx](app/components/meals/BarcodeScannerModal.tsx): leitor de código de barras com câmera ao vivo e consulta OpenFoodFacts.
+- [app/components/meals/NutritionOcrModal.tsx](app/components/meals/NutritionOcrModal.tsx): captura/upload de foto da tabela nutricional e extração via IA multimodal.
+- [app/components/meals/QuickAddModal.tsx](app/components/meals/QuickAddModal.tsx): lançamento rápido de calorias e macros para uma refeição.
+- [app/components/meals/CustomFoodModal.tsx](app/components/meals/CustomFoodModal.tsx): cadastro manual de alimento personalizado.
 - [app/components/OnboardingForm.tsx](app/components/OnboardingForm.tsx): onboarding inicial do usuário.
 - [app/components/DailyEntryForm.tsx](app/components/DailyEntryForm.tsx): formulário de registro diário.
 - [app/components/MetabolicCharts.tsx](app/components/MetabolicCharts.tsx): visualizações analíticas principais.
@@ -53,6 +62,12 @@ A aplicação atual possui quatro eixos centrais:
 ### Estado e dados
 
 - [app/hooks/useMetabolicData.ts](app/hooks/useMetabolicData.ts): hook central para sincronizar settings, logs, insights, loading e erro.
+- [lib/foodCatalog/tacoData.json](lib/foodCatalog/tacoData.json): dataset curado com ~400 alimentos brasileiros essenciais da tabela TACO/TBCA.
+- [lib/foodCatalog/search.ts](lib/foodCatalog/search.ts): mecanismo de busca difusa normalizada (fuzzy search) para alimentos locais.
+- [lib/foodCatalog/openFoodFacts.ts](lib/foodCatalog/openFoodFacts.ts): cliente para consulta de produtos por código de barras na API v2 do Open Food Facts.
+- [lib/ai/mealVisionEstimate.ts](lib/ai/mealVisionEstimate.ts): motor físico-volumétrico de estimativa calórica por visão computacional (OpenRouter: Gemini 3.6 Flash / Sonnet 4.6).
+- [lib/ai/nutritionOcr.ts](lib/ai/nutritionOcr.ts): pipeline de visão multimodal para leitura e estruturação de tabelas nutricionais ANVISA/FDA.
+- [lib/mealSync.ts](lib/mealSync.ts): sincronização e rollup automático de calorias e proteínas das refeições para o DailyLog.
 - [lib/dateUtils.ts](lib/dateUtils.ts): utilitários para manipulação de datas e compatibilidade com fusos.
 - [lib/metabolicAlgo.ts](lib/metabolicAlgo.ts): motor metabólico com heurística inicial, EWMA, gate semanal e geração de insights.
 - [lib/motorSignals.ts](lib/motorSignals.ts): cálculo determinístico de sinais do motor (TDEE empírico, tendência EWMA, compliance calórico, confidence level) e construção do WeekSummary.
@@ -61,6 +76,13 @@ A aplicação atual possui quatro eixos centrais:
 
 ### API Routes
 
+- [app/api/meals/route.ts](app/api/meals/route.ts): listagem de refeições por data, criação de refeições e adição de itens com sincronização no DailyLog.
+- [app/api/meals/[id]/route.ts](app/api/meals/[id]/route.ts): renomeação, reordenação e exclusão de refeições.
+- [app/api/meals/items/[id]/route.ts](app/api/meals/items/[id]/route.ts): edição de gramas/macros e exclusão de itens de refeição.
+- [app/api/foods/route.ts](app/api/foods/route.ts): busca combinada de alimentos (TACO + custom) e cadastro de novos alimentos.
+- [app/api/foods/barcode/[barcode]/route.ts](app/api/foods/barcode/[barcode]/route.ts): consulta por código de barras com fallback e cache do Open Food Facts.
+- [app/api/ai/meal-vision-estimate/route.ts](app/api/ai/meal-vision-estimate/route.ts): estimativa calórica e física de prato por foto (visão computacional).
+- [app/api/ai/nutrition-ocr/route.ts](app/api/ai/nutrition-ocr/route.ts): OCR e extração estruturada de tabelas nutricionais por IA.
 - [app/api/logs/route.ts](app/api/logs/route.ts): leitura e gravação de logs diários.
 - [app/api/setup/route.ts](app/api/setup/route.ts): onboarding e persistência de UserSettings.
 - [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts): pipeline semanal completo (recalibração IA + relatório narrativo + WhatsApp).
@@ -116,7 +138,7 @@ Regras de integridade:
 
 ### 3.3 AiReport
 
-Modelo novo criado para persistir relatórios semanais de IA.
+Modelo criado para persistir relatórios semanais de IA.
 
 Campos:
 - id: cuid()
@@ -124,10 +146,52 @@ Campos:
 - content: String em Text
 - isRead: Boolean default false
 
-Uso:
-- Armazenar o relatório gerado pelo Gemini.
-- Expor o conteúdo no dashboard via modal.
-- Permitir arquivamento ao marcar como lido.
+### 3.4 FoodItem
+
+Catálogo de alimentos customizados e produtos em cache do Open Food Facts.
+
+Campos:
+- id: cuid()
+- name: String (nome do alimento)
+- brand: String opcional (marca ou "TACO", "Caseiro")
+- barcode: String opcional única (EAN-13 / UPC)
+- servingSize: Float (porção de referência, padrão 100)
+- servingUnit: String ("g", "ml", "un", etc.)
+- calories: Float (kcal na porção de referência)
+- protein: Float (g de proteína)
+- carbs: Float (g de carboidratos)
+- fat: Float (g de gorduras)
+- fiber: Float opcional (g de fibras)
+- sodium: Float opcional (mg de sódio)
+- isCustom: Boolean (se criado pelo usuário)
+- createdAt: DateTime
+
+### 3.5 Meal
+
+Representa um bloco de refeição em um determinado dia.
+
+Campos:
+- id: cuid()
+- date: String `YYYY-MM-DD` (alinhado com DailyLog)
+- name: String (ex: "Café da Manhã", "Almoço", "Lanche da Tarde", "Jantar")
+- order: Int (ordem visual de exibição)
+- items: relação 1-N com MealItem
+- createdAt / updatedAt: auditoria
+
+### 3.6 MealItem
+
+Item ou alimento individual registrado dentro de uma refeição.
+
+Campos:
+- id: cuid()
+- mealId: chave estrangeira para Meal (onDelete: Cascade)
+- foodItemId: chave estrangeira opcional para FoodItem
+- name: String (snapshot do nome do alimento)
+- amount: Float (quantidade consumida na unidade informada)
+- unit: String ("g", "ml", "un", "porção")
+- calories, protein, carbs, fat, fiber: Float (valores calculados proporcionais ao peso)
+- isQuickAdd: Boolean (flag para adições diretas de macros)
+- createdAt: DateTime
 
 ---
 

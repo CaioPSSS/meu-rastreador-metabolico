@@ -55,3 +55,62 @@ model AiReport {
 
   @@index([createdAt(sort: Desc)])
 }
+
+model FoodItem {
+  id          String     @id @default(cuid())
+  name        String     // Ex: "Peito de frango grelhado"
+  brand       String?    // Ex: "TACO", "Sadia", "Nestlé", "Caseiro"
+  barcode     String?    @unique // Código de barras EAN-13 / UPC
+  servingSize Float      @default(100) // Tamanho da porção de referência (ex: 100)
+  servingUnit String     @default("g") // "g", "ml", "un", "fatia", "colher"
+  calories    Float      // Calorias na porção de referência (kcal)
+  protein     Float      // Proteínas (g)
+  carbs       Float      // Carboidratos (g)
+  fat         Float      // Gorduras totais (g)
+  fiber       Float?     // Fibras (g, opcional)
+  sodium      Float?     // Sódio (mg, opcional)
+  isCustom    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  mealItems   MealItem[]
+
+  @@index([name])
+  @@index([barcode])
+}
+
+model Meal {
+  id        String     @id @default(cuid())
+  date      String     // "YYYY-MM-DD" compatível com DailyLog
+  name      String     // "Café da Manhã", "Almoço", "Lanche da Tarde", "Jantar", etc.
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items     MealItem[]
+
+  @@index([date])
+}
+
+model MealItem {
+  id         String    @id @default(cuid())
+  mealId     String
+  meal       Meal      @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  foodItemId String?
+  foodItem   FoodItem? @relation(fields: [foodItemId], references: [id], onDelete: SetNull)
+
+  name       String    // Nome do item no momento do consumo
+  amount     Float     // Quantidade consumida (ex: 150)
+  unit       String    // "g", "ml", "un", "porção"
+
+  calories   Float     // kcal
+  protein    Float     // g
+  carbs      Float     // g
+  fat        Float     // g
+  fiber      Float?    // g
+
+  isQuickAdd Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([mealId])
+}
