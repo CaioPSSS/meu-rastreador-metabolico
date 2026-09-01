@@ -7,6 +7,7 @@ import DailyEntryForm from './DailyEntryForm';
 import MetabolicCharts from './MetabolicCharts';
 import RecentHistoryTable from './RecentHistoryTable';
 import MealTracker from './meals/MealTracker';
+import ModalPortal from './ModalPortal';
 import { useMetabolicData, Log, Settings, LogFormState, SetupFormState } from '@/app/hooks/useMetabolicData';
 import { getYesterdayLocalISODate } from '@/lib/dateUtils';
 import { average, calcStreak, clamp, CALORIE_COMPLIANCE_MARGIN } from '@/lib/chartUtils';
@@ -337,7 +338,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 animate-fade-in-up">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="glass-card p-5 space-y-4">
@@ -392,9 +393,9 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
       </header>
 
       {/* ── Modal de Relatório ──────────────────────────────────────────────── */}
-      {showModal && unreadReport !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl animate-fade-in-up">
+      <ModalPortal isOpen={showModal && unreadReport !== null}>
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl my-auto">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">Análise Clínica Semanal</p>
@@ -411,12 +412,12 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
             </div>
             <div className="mt-5 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
               <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
-                {unreadReport.content}
+                {unreadReport?.content}
               </div>
             </div>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* ── Insights Automáticos ────────────────────────────────────────────── */}
       {insights.length > 0 && (

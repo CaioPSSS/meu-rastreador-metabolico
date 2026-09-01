@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, PlusCircle, Check } from 'lucide-react';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
+import ModalPortal from '../ModalPortal';
 
 interface CustomFoodModalProps {
   isOpen: boolean;
@@ -83,8 +84,9 @@ export default function CustomFoodModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-fade-in-up">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-400">
             <PlusCircle className="h-5 w-5" />
@@ -273,5 +275,6 @@ export default function CustomFoodModal({
         </form>
       </div>
     </div>
+  </ModalPortal>
   );
 }

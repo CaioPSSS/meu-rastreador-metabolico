@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Zap, Flame, Dumbbell, Wheat, Droplet } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 interface QuickAddModalProps {
   mealName: string;
@@ -13,7 +14,7 @@ interface QuickAddModalProps {
 }
 
 const INPUT_CLASS =
-  'w-full bg-[#080d1a] border border-slate-700/70 rounded-xl px-3 py-2.5 text-white placeholder-slate-600 text-sm transition focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30';
+  'w-full bg-[#080d1a] border border-slate-700/70 rounded-xl px-3 py-2 text-white placeholder-slate-600 text-sm transition focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30';
 const LABEL_CLASS = 'block text-xs uppercase text-slate-400 font-semibold tracking-wider mb-1';
 
 export default function QuickAddModal({
@@ -30,19 +31,19 @@ export default function QuickAddModal({
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!calories || Number(calories) <= 0) {
-      setError('Informe a quantidade de calorias.');
+    if (!calories) {
+      setError('Informe ao menos a quantidade de calorias.');
       return;
     }
 
     setSubmitting(true);
-    setError('');
+    setError(null);
 
     try {
       const response = await fetch('/api/meals', {
@@ -52,10 +53,10 @@ export default function QuickAddModal({
           action: 'add_item',
           mealId,
           date,
-          name: name.trim() || `Adição Rápida (${mealName})`,
+          name: name.trim() || 'Adição Rápida',
           amount: 1,
           unit: 'porção',
-          calories: Number(calories) || 0,
+          calories: Number(calories),
           protein: Number(protein) || 0,
           carbs: Number(carbs) || 0,
           fat: Number(fat) || 0,
@@ -77,137 +78,130 @@ export default function QuickAddModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-fade-in-up">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl p-6 shadow-2xl space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-amber-400">
-            <Zap className="h-5 w-5" />
-            <h3 className="text-lg font-bold text-white">Adição Rápida</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <p className="text-xs text-slate-400">
-          Adicionando diretamente ao <strong className="text-slate-200">{mealName}</strong> sem detalhar ingredientes.
-        </p>
-
-        {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className={LABEL_CLASS}>Descrição (Opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Almoço no Restaurante / Hambúrguer"
-              className={INPUT_CLASS}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={LABEL_CLASS}>
-              <span className="flex items-center gap-1">
-                <Flame className="h-3.5 w-3.5 text-emerald-400" /> Calorias (kcal) *
-              </span>
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="10000"
-              placeholder="Ex: 650"
-              required
-              className={`${INPUT_CLASS} text-emerald-300 font-semibold text-base`}
-              value={calories}
-              onChange={(e) => setCalories(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={LABEL_CLASS}>
-                <span className="flex items-center gap-1 text-[11px]">
-                  <Dumbbell className="h-3 w-3 text-blue-400" /> Proteína (g)
-                </span>
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="500"
-                placeholder="Ex: 40"
-                className={INPUT_CLASS}
-                value={protein}
-                onChange={(e) => setProtein(e.target.value)}
-              />
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl p-6 shadow-2xl space-y-5 my-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-400">
+              <Zap className="h-5 w-5" />
+              <h3 className="text-lg font-bold text-white">Adição Rápida</h3>
             </div>
-
-            <div>
-              <label className={LABEL_CLASS}>
-                <span className="flex items-center gap-1 text-[11px]">
-                  <Wheat className="h-3 w-3 text-amber-400" /> Carbo (g)
-                </span>
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="500"
-                placeholder="Ex: 50"
-                className={INPUT_CLASS}
-                value={carbs}
-                onChange={(e) => setCarbs(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL_CLASS}>
-                <span className="flex items-center gap-1 text-[11px]">
-                  <Droplet className="h-3 w-3 text-rose-400" /> Gordura (g)
-                </span>
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="500"
-                placeholder="Ex: 20"
-                className={INPUT_CLASS}
-                value={fat}
-                onChange={(e) => setFat(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition"
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
             >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-bold rounded-xl text-sm transition shadow-lg hover:shadow-amber-500/20 disabled:opacity-50"
-            >
-              {submitting ? 'Salvando...' : 'Confirmar Adição'}
+              <X className="h-5 w-5" />
             </button>
           </div>
-        </form>
+
+          <p className="text-xs text-slate-400">
+            Adicionando diretamente ao <strong className="text-slate-200">{mealName}</strong> sem detalhar ingredientes.
+          </p>
+
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className={LABEL_CLASS}>Descrição (Opcional)</label>
+              <input
+                type="text"
+                placeholder="Ex: Almoço fora de casa / Salgado"
+                className={INPUT_CLASS}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className={LABEL_CLASS}>
+                Calorias (kcal) <span className="text-rose-400">*</span>
+              </label>
+              <div className="relative">
+                <Flame className="absolute left-3.5 top-2.5 h-4 w-4 text-emerald-400" />
+                <input
+                  type="number"
+                  step="1"
+                  required
+                  placeholder="0"
+                  className={`${INPUT_CLASS} pl-10 text-emerald-400 font-bold text-base`}
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className={LABEL_CLASS}>Proteína (g)</label>
+                <div className="relative">
+                  <Dumbbell className="absolute left-3 top-2.5 h-3.5 w-3.5 text-blue-400" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    className={`${INPUT_CLASS} pl-8 text-blue-400 font-semibold`}
+                    value={protein}
+                    onChange={(e) => setProtein(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS}>Carbo (g)</label>
+                <div className="relative">
+                  <Wheat className="absolute left-3 top-2.5 h-3.5 w-3.5 text-amber-400" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    className={`${INPUT_CLASS} pl-8 text-amber-400 font-semibold`}
+                    value={carbs}
+                    onChange={(e) => setCarbs(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS}>Gordura (g)</label>
+                <div className="relative">
+                  <Droplet className="absolute left-3 top-2.5 h-3.5 w-3.5 text-rose-400" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    className={`${INPUT_CLASS} pl-8 text-rose-400 font-semibold`}
+                    value={fat}
+                    onChange={(e) => setFat(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-bold rounded-xl text-sm transition shadow-lg hover:shadow-amber-500/20 disabled:opacity-50"
+              >
+                {submitting ? 'Salvando...' : 'Confirmar Adição'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

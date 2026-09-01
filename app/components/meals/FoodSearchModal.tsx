@@ -15,6 +15,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
+import ModalPortal from '../ModalPortal';
 
 interface FoodSearchModalProps {
   mealName: string;
@@ -165,8 +166,9 @@ export default function FoodSearchModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 sm:p-4 backdrop-blur-md animate-fade-in-up">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 p-3 sm:p-4 backdrop-blur-md">
+        <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col my-auto">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -452,7 +454,8 @@ export default function FoodSearchModal({
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

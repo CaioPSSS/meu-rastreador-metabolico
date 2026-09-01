@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Camera, RefreshCw, AlertCircle, Search, Sparkles } from 'lucide-react';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
+import ModalPortal from '../ModalPortal';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -182,8 +183,9 @@ export default function BarcodeScannerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md animate-fade-in-up">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl space-y-4">
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md">
+        <div className="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl space-y-4 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-cyan-400">
@@ -293,5 +295,6 @@ export default function BarcodeScannerModal({
         </div>
       </div>
     </div>
+  </ModalPortal>
   );
 }

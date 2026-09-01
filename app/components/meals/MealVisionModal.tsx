@@ -17,6 +17,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { AnalyzedFoodComponent, MealVisionResult } from '@/lib/ai/mealVisionEstimate';
+import ModalPortal from '../ModalPortal';
 
 interface MealVisionModalProps {
   mealName: string;
@@ -35,7 +36,8 @@ export default function MealVisionModal({
   onClose,
   onSuccess,
 }: MealVisionModalProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [userContext, setUserContext] = useState('');
@@ -184,85 +186,97 @@ export default function MealVisionModal({
     setError(null);
     setUserContext('');
     setCustomTotalCalories('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 sm:p-4 backdrop-blur-md animate-fade-in-up">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5 text-emerald-400">
-            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white">
-                Estimar Prato por Foto (IA)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Decomposição física e volumétrica para o <strong>{mealName}</strong>
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs">
-            {error}
-          </div>
-        )}
-
-        {/* ── ETAPA 1: Captura e Contexto ───────────────────────────────────── */}
-        {!result && (
-          <div className="space-y-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-
-            {!imagePreview ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-emerald-500/40 rounded-2xl hover:border-emerald-400/80 hover:bg-slate-900 transition group gap-3"
-                >
-                  <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
-                    <Camera className="h-6 w-6" />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-semibold text-white block">Tirar Foto do Prato</span>
-                    <span className="text-xs text-slate-500">Enquadrar o prato com talheres</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-slate-700 rounded-2xl hover:border-slate-500 hover:bg-slate-900 transition group gap-3"
-                >
-                  <div className="p-3 rounded-full bg-slate-800 text-slate-300 group-hover:scale-110 transition-transform">
-                    <Upload className="h-6 w-6" />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-semibold text-white block">Upload da Galeria</span>
-                    <span className="text-xs text-slate-500">Selecionar foto existente</span>
-                  </div>
-                </button>
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 p-3 sm:p-4 backdrop-blur-md">
+        <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto flex flex-col my-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2.5 text-emerald-400">
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <Sparkles className="h-5 w-5" />
               </div>
-            ) : (
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  Estimar Prato por Foto (IA)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Decomposição física e volumétrica para o <strong>{mealName}</strong>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs">
+              {error}
+            </div>
+          )}
+
+          {/* ── ETAPA 1: Captura e Contexto ───────────────────────────────────── */}
+          {!result && (
+            <div className="space-y-4">
+              {/* Input específico para CÂMERA (com capture) */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {/* Input específico para GALERIA / ARQUIVOS (sem capture) */}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {!imagePreview ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-emerald-500/40 rounded-2xl hover:border-emerald-400/80 hover:bg-slate-900 transition group gap-3"
+                  >
+                    <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                      <Camera className="h-6 w-6" />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-sm font-semibold text-white block">Tirar Foto do Prato</span>
+                      <span className="text-xs text-slate-500">Enquadrar o prato com talheres</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-slate-700 rounded-2xl hover:border-slate-500 hover:bg-slate-900 transition group gap-3"
+                  >
+                    <div className="p-3 rounded-full bg-slate-800 text-slate-300 group-hover:scale-110 transition-transform">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-sm font-semibold text-white block">Upload da Galeria</span>
+                      <span className="text-xs text-slate-500">Selecionar foto existente</span>
+                    </div>
+                  </button>
+                </div>
+              ) : (
               <div className="space-y-4">
                 <div className="relative aspect-video max-h-56 w-full rounded-2xl overflow-hidden border border-slate-700 bg-black flex items-center justify-center">
                   <img
@@ -498,5 +512,6 @@ export default function MealVisionModal({
         )}
       </div>
     </div>
+  </ModalPortal>
   );
 }

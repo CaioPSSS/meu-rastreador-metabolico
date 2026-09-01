@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { X, Sparkles, Upload, Camera, Check, RefreshCw, AlertCircle } from 'lucide-react';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
 import { ExtractedNutritionLabel } from '@/lib/ai/nutritionOcr';
+import ModalPortal from '../ModalPortal';
 
 interface NutritionOcrModalProps {
   isOpen: boolean;
@@ -20,7 +21,8 @@ export default function NutritionOcrModal({
   onClose,
   onFoodExtracted,
 }: NutritionOcrModalProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -126,81 +128,93 @@ export default function NutritionOcrModal({
     setImagePreview(null);
     setExtractedData(null);
     setError(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-md animate-fade-in-up">
-      <div className="w-full max-w-xl bg-slate-900 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-indigo-400">
-            <Sparkles className="h-5 w-5" />
-            <h3 className="text-base font-bold text-white">OCR de Tabela Nutricional por IA</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Etapa 1: Captura / Upload da Imagem */}
-        {!imagePreview && (
-          <div className="space-y-4">
-            <p className="text-xs text-slate-400">
-              Tire uma foto nítida ou faça upload da tabela nutricional impressa na embalagem do produto. Nossa IA extrairá os macros automaticamente.
-            </p>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-indigo-500/40 rounded-2xl hover:border-indigo-400/80 hover:bg-slate-900 transition group gap-3"
-              >
-                <div className="p-3 rounded-full bg-indigo-500/10 text-indigo-400 group-hover:scale-110 transition-transform">
-                  <Camera className="h-6 w-6" />
-                </div>
-                <div className="text-center">
-                  <span className="text-sm font-semibold text-white block">Tirar Foto com a Câmera</span>
-                  <span className="text-xs text-slate-500">Apontar para a tabela nutricional</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-slate-700 rounded-2xl hover:border-slate-500 hover:bg-slate-900 transition group gap-3"
-              >
-                <div className="p-3 rounded-full bg-slate-800 text-slate-300 group-hover:scale-110 transition-transform">
-                  <Upload className="h-6 w-6" />
-                </div>
-                <div className="text-center">
-                  <span className="text-sm font-semibold text-white block">Upload da Galeria</span>
-                  <span className="text-xs text-slate-500">Selecionar arquivo JPG ou PNG</span>
-                </div>
-              </button>
+    <ModalPortal isOpen={isOpen}>
+      <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-md">
+        <div className="w-full max-w-xl bg-slate-900 border border-slate-700/80 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-indigo-400">
+              <Sparkles className="h-5 w-5" />
+              <h3 className="text-base font-bold text-white">OCR de Tabela Nutricional por IA</h3>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-        )}
+
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-300 text-xs flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Etapa 1: Captura / Upload da Imagem */}
+          {!imagePreview && (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-400">
+                Tire uma foto nítida ou faça upload da tabela nutricional impressa na embalagem do produto. Nossa IA extrairá os macros automaticamente.
+              </p>
+
+              {/* Input específico para CÂMERA (com capture) */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {/* Input específico para GALERIA / ARQUIVOS (sem capture) */}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-indigo-500/40 rounded-2xl hover:border-indigo-400/80 hover:bg-slate-900 transition group gap-3"
+                >
+                  <div className="p-3 rounded-full bg-indigo-500/10 text-indigo-400 group-hover:scale-110 transition-transform">
+                    <Camera className="h-6 w-6" />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-semibold text-white block">Tirar Foto com a Câmera</span>
+                    <span className="text-xs text-slate-500">Apontar para a tabela nutricional</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center p-8 bg-slate-950/60 border-2 border-dashed border-slate-700 rounded-2xl hover:border-slate-500 hover:bg-slate-900 transition group gap-3"
+                >
+                  <div className="p-3 rounded-full bg-slate-800 text-slate-300 group-hover:scale-110 transition-transform">
+                    <Upload className="h-6 w-6" />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-semibold text-white block">Upload da Galeria</span>
+                    <span className="text-xs text-slate-500">Selecionar arquivo JPG ou PNG</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
 
         {/* Etapa 2: Processamento e Conferência dos Dados Extraídos */}
         {imagePreview && (
@@ -385,6 +399,7 @@ export default function NutritionOcrModal({
         )}
       </div>
     </div>
+  </ModalPortal>
   );
 }
 
