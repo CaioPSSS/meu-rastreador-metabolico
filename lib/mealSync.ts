@@ -12,16 +12,18 @@ export async function syncDailyLogFromMeals(date: string): Promise<{ totalCalori
 
   let totalCalories = 0;
   let totalProtein = 0;
+  let hasItems = false;
 
   for (const meal of meals) {
+    if (meal.items.length > 0) hasItems = true;
     for (const item of meal.items) {
       totalCalories += item.calories || 0;
       totalProtein += item.protein || 0;
     }
   }
 
-  const roundedCalories = Math.round(totalCalories);
-  const roundedProtein = Math.round(totalProtein);
+  const roundedCalories = hasItems ? Math.round(totalCalories) : null;
+  const roundedProtein = hasItems ? Math.round(totalProtein) : null;
 
   // Upsert no DailyLog preservando outros campos (peso, sono, água, etc.)
   await prisma.dailyLog.upsert({
@@ -39,8 +41,8 @@ export async function syncDailyLogFromMeals(date: string): Promise<{ totalCalori
   });
 
   return {
-    totalCalories: roundedCalories,
-    totalProtein: roundedProtein,
+    totalCalories: roundedCalories ?? 0,
+    totalProtein: roundedProtein ?? 0,
   };
 }
 

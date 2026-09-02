@@ -1,8 +1,9 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { ChevronDown, CheckCircle2, Circle } from 'lucide-react';
+import { ChevronDown, CheckCircle2, Circle, Flame } from 'lucide-react';
 import { LogFormState, Log } from '@/app/hooks/useMetabolicData';
+import { MealTotals } from './meals/MealTracker';
 
 interface DailyEntryFormProps {
   logForm: LogFormState;
@@ -13,6 +14,7 @@ interface DailyEntryFormProps {
   clientMessage: { type: string; text: string };
   alerts: string[];
   logs: Log[];
+  mealTotals?: MealTotals | null;
 }
 
 const TRAINING_OPTIONS = [
@@ -83,6 +85,7 @@ export default function DailyEntryForm({
   clientMessage,
   alerts,
   logs,
+  mealTotals,
 }: DailyEntryFormProps) {
   const [showHealth, setShowHealth] = useState(false);
   const [showMental, setShowMental] = useState(false);
@@ -90,8 +93,6 @@ export default function DailyEntryForm({
   // Completude dos campos primários
   const primaryFields = [
     logForm.weight,
-    logForm.caloriesConsumed,
-    logForm.proteinConsumed,
     logForm.trainingType !== 'Descanso' ? 'ok' : logForm.trainingType,
     logForm.date,
   ];
@@ -160,17 +161,16 @@ export default function DailyEntryForm({
         <div className="space-y-4">
           <p className="text-xs uppercase text-slate-500 tracking-wider font-semibold">Métricas Primárias</p>
 
-          <div>
-            <label className={LABEL_CLASS}>Data de Referência</label>
-            <input
-              type="date"
-              className={INPUT_CLASS}
-              value={logForm.date}
-              onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLASS}>Data de Referência</label>
+              <input
+                type="date"
+                className={INPUT_CLASS}
+                value={logForm.date}
+                onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
+              />
+            </div>
             <div>
               <label className={LABEL_CLASS}>
                 Peso <span className="text-slate-600 normal-case">(kg)</span>
@@ -186,35 +186,53 @@ export default function DailyEntryForm({
                 onChange={(e) => setLogForm({ ...logForm, weight: e.target.value })}
               />
             </div>
-            <div>
-              <label className={LABEL_CLASS}>
-                Proteína <span className="text-slate-600 normal-case">(g)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="600"
-                placeholder="ex: 150"
-                className={INPUT_CLASS}
-                value={logForm.proteinConsumed}
-                onChange={(e) => setLogForm({ ...logForm, proteinConsumed: e.target.value })}
-              />
-            </div>
           </div>
 
-          <div>
-            <label className={LABEL_CLASS}>
-              Calorias <span className="text-slate-600 normal-case">(kcal)</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="10000"
-              placeholder="ex: 2100"
-              className={INPUT_CLASS}
-              value={logForm.caloriesConsumed}
-              onChange={(e) => setLogForm({ ...logForm, caloriesConsumed: e.target.value })}
-            />
+          {/* ── Resumo Nutricional das Refeições do Dia (Automático via MealTracker) ── */}
+          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase text-slate-400 font-semibold tracking-wider flex items-center gap-1.5">
+                <Flame className="h-3.5 w-3.5 text-emerald-400" /> Nutrição do Dia (via Refeições)
+              </span>
+              {mealTotals && mealTotals.calories > 0 ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-medium">
+                  Sincronizado
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-500">Nenhum item ainda</span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+              <div className="bg-slate-900/80 rounded-lg p-2 border border-slate-800/80">
+                <span className="text-[10px] uppercase text-slate-500 block">Kcal</span>
+                <span className="text-sm font-bold text-emerald-400">
+                  {mealTotals?.calories ?? 0}
+                </span>
+              </div>
+              <div className="bg-slate-900/80 rounded-lg p-2 border border-slate-800/80">
+                <span className="text-[10px] uppercase text-slate-500 block">Proteína</span>
+                <span className="text-sm font-bold text-blue-400">
+                  {mealTotals?.protein ?? 0}g
+                </span>
+              </div>
+              <div className="bg-slate-900/80 rounded-lg p-2 border border-slate-800/80">
+                <span className="text-[10px] uppercase text-slate-500 block">Carbo</span>
+                <span className="text-sm font-bold text-amber-400">
+                  {mealTotals?.carbs ?? 0}g
+                </span>
+              </div>
+              <div className="bg-slate-900/80 rounded-lg p-2 border border-slate-800/80">
+                <span className="text-[10px] uppercase text-slate-500 block">Gordura</span>
+                <span className="text-sm font-bold text-rose-400">
+                  {mealTotals?.fat ?? 0}g
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 pt-0.5">
+              Calculado automaticamente a partir das refeições cadastradas.
+            </p>
           </div>
 
           {/* Tipo de treino como pill buttons */}

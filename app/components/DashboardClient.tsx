@@ -6,10 +6,10 @@ import OnboardingForm from './OnboardingForm';
 import DailyEntryForm from './DailyEntryForm';
 import MetabolicCharts from './MetabolicCharts';
 import RecentHistoryTable from './RecentHistoryTable';
-import MealTracker from './meals/MealTracker';
+import MealTracker, { MealTotals } from './meals/MealTracker';
 import ModalPortal from './ModalPortal';
 import { useMetabolicData, Log, Settings, LogFormState, SetupFormState } from '@/app/hooks/useMetabolicData';
-import { getYesterdayLocalISODate } from '@/lib/dateUtils';
+import { getLocalISODate } from '@/lib/dateUtils';
 import { average, calcStreak, clamp, CALORIE_COMPLIANCE_MARGIN } from '@/lib/chartUtils';
 
 interface DashboardClientProps {
@@ -29,16 +29,14 @@ const initialSetupForm: SetupFormState = {
 };
 
 const initialLogForm: LogFormState = {
-  date: getYesterdayLocalISODate(),
+  date: getLocalISODate(),
   weight: '',
-  caloriesConsumed: '',
   caloriesBurned: '',
   trainingType: 'Descanso',
   sleepHours: '',
   waterIntake: '',
   stressLevel: '3',
   mood: 'Regular',
-  proteinConsumed: '',
   waistCircumference: '',
 };
 
@@ -100,7 +98,17 @@ function CalorieProgressBar({
 
   const textColor = isOver ? 'text-rose-400' : isNear ? 'text-amber-300' : 'text-emerald-300';
 
-  const dayLabel = date === new Date().toISOString().slice(0, 10) ? 'hoje' : 'ontem';
+  const todayStr = getLocalISODate();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalISODate(yesterday);
+
+  let dayLabel = `(${date})`;
+  if (date === todayStr) {
+    dayLabel = 'hoje';
+  } else if (date === yesterdayStr) {
+    dayLabel = 'ontem';
+  }
 
   return (
     <div className="px-1 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -161,10 +169,22 @@ function TodayMacroBar({ log }: { log: Log }) {
 
   if (items.length === 0) return null;
 
+  const todayStr = getLocalISODate();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalISODate(yesterday);
+
+  let dayLabel = log.date;
+  if (log.date === todayStr) {
+    dayLabel = 'Hoje';
+  } else if (log.date === yesterdayStr) {
+    dayLabel = 'Ontem';
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs px-1">
       <span className="text-slate-500 uppercase tracking-wider">
-        {log.date === new Date().toISOString().slice(0, 10) ? 'Hoje' : 'Ontem'} —
+        {dayLabel} —
       </span>
       {items.map((item) => (
         <span key={item.label} className="flex items-center gap-1">
@@ -186,6 +206,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
 
   const [setupForm, setSetupForm] = useState<SetupFormState>(initialSetupForm);
   const [logForm, setLogForm] = useState(initialLogForm);
+  const [mealTotals, setMealTotals] = useState<MealTotals | null>(null);
   const [clientMessage, setClientMessage] = useState({ type: '', text: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [unreadReport, setUnreadReport] = useState<AiReportSummary | null>(null);
@@ -217,9 +238,12 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const streak = calcStreak(logs);
   const daysToRecalc = settings ? calcDaysToRecalc(settings.lastRecalcAt) : null;
 
-  // Log mais recente para o mini-resumo e barra calórica
+  // Procura o log mais recente que tenha calorias registradas.
+  // Se hoje tiver refeições, será hoje. Se hoje ainda não tiver refeições, exibe o último dia com alimentação registrada.
+  const latestLogWithNutrition = logs.find((l) => l.caloriesConsumed !== null && l.caloriesConsumed > 0) ?? logs[0] ?? null;
   const latestLog = logs[0] ?? null;
-  const todayCalories = latestLog?.caloriesConsumed ?? null;
+  const activeCalories = latestLogWithNutrition?.caloriesConsumed ?? null;
+  const activeCaloriesDate = latestLogWithNutrition?.date ?? (latestLog?.date || getLocalISODate());
 
   // ── Alertas clínicos ──────────────────────────────────────────────────────
   const alerts: string[] = [];
@@ -258,7 +282,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   };
 
   const resetLogForm = () => {
-    setLogForm({ ...initialLogForm, date: getYesterdayLocalISODate() });
+    setLogForm({ ...initialLogForm, date: getLocalISODate() });
     setIsEditing(false);
     setClientMessage({ type: '', text: '' });
   };
@@ -267,14 +291,12 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
     setLogForm({
       date: log.date,
       weight: log.weight?.toString() || '',
-      caloriesConsumed: log.caloriesConsumed?.toString() || '',
       caloriesBurned: log.caloriesBurned?.toString() || '',
       trainingType: log.trainingType,
       sleepHours: log.sleepHours?.toString() || '',
       waterIntake: log.waterIntake?.toString() || '',
       stressLevel: log.stressLevel?.toString() || '3',
       mood: log.mood || 'Regular',
-      proteinConsumed: log.proteinConsumed?.toString() || '',
       waistCircumference: log.waistCircumference?.toString() || '',
     });
     setIsEditing(true);
@@ -380,14 +402,14 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
         </div>
 
         {/* Barra de progresso calórica + macro do dia */}
-        {latestLog && (
+        {latestLogWithNutrition && (
           <div className="space-y-2.5 pt-1 border-t border-slate-800/60">
             <CalorieProgressBar
-              consumed={todayCalories}
+              consumed={activeCalories}
               target={settings.currentCalorieTarget}
-              date={latestLog.date}
+              date={activeCaloriesDate}
             />
-            <TodayMacroBar log={latestLog} />
+            <TodayMacroBar log={latestLogWithNutrition} />
           </div>
         )}
       </header>
@@ -442,11 +464,12 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
 
       {/* ── Seção de Refeições & Alimentos ─────────────────────────────────── */}
       <MealTracker
-        selectedDate={logForm.date || getYesterdayLocalISODate()}
+        selectedDate={logForm.date || getLocalISODate()}
         onDateChange={(newDate) => setLogForm((prev) => ({ ...prev, date: newDate }))}
         calorieTarget={settings.currentCalorieTarget}
         userWeight={latestLog?.weight ?? null}
         onMealsUpdated={refresh}
+        onTotalsChange={setMealTotals}
       />
 
       {/* ── Grid Principal: Formulário + Gráficos ──────────────────────────── */}
@@ -460,6 +483,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
           clientMessage={clientMessage}
           alerts={alerts}
           logs={logs}
+          mealTotals={mealTotals}
         />
 
         <MetabolicCharts logs={logs} settings={settings} />

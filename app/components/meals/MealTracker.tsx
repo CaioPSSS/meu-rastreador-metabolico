@@ -19,12 +19,21 @@ import QuickAddModal from './QuickAddModal';
 import CustomFoodModal from './CustomFoodModal';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
 
+export interface MealTotals {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+}
+
 interface MealTrackerProps {
   selectedDate: string;
   onDateChange?: (newDate: string) => void;
   calorieTarget: number;
   userWeight?: number | null;
   onMealsUpdated?: () => void;
+  onTotalsChange?: (totals: MealTotals) => void;
 }
 
 export default function MealTracker({
@@ -33,9 +42,10 @@ export default function MealTracker({
   calorieTarget,
   userWeight,
   onMealsUpdated,
+  onTotalsChange,
 }: MealTrackerProps) {
   const [meals, setMeals] = useState<MealData[]>([]);
-  const [totals, setTotals] = useState({
+  const [totals, setTotals] = useState<MealTotals>({
     calories: 0,
     protein: 0,
     carbs: 0,
@@ -67,16 +77,18 @@ export default function MealTracker({
       if (res.ok) {
         const data = await res.json();
         setMeals(data.meals || []);
-        setTotals(
-          data.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
-        );
+        const loadedTotals = data.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+        setTotals(loadedTotals);
+        if (onTotalsChange) {
+          onTotalsChange(loadedTotals);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar refeições:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onTotalsChange]);
 
   useEffect(() => {
     void loadMeals(selectedDate);

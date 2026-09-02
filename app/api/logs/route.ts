@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateInsights, recalculateAdaptiveTarget, shouldRecalculate } from '@/lib/metabolicAlgo';
+import { syncDailyLogFromMeals } from '@/lib/mealSync';
 
 export async function GET() {
   const logs = await prisma.dailyLog.findMany({
@@ -19,14 +20,12 @@ export async function POST(request: Request) {
   const {
     date,
     weight,
-    caloriesConsumed,
     caloriesBurned,
     trainingType,
     sleepHours,
     waterIntake,
     stressLevel,
     mood,
-    proteinConsumed,
     waistCircumference,
   } = body;
 
@@ -34,30 +33,29 @@ export async function POST(request: Request) {
     where: { date },
     update: {
       weight: weight ? Number(weight) : null,
-      caloriesConsumed: caloriesConsumed ? Number(caloriesConsumed) : null,
       caloriesBurned: caloriesBurned ? Number(caloriesBurned) : null,
       trainingType,
       sleepHours: sleepHours ? Number(sleepHours) : null,
       waterIntake: waterIntake ? Number(waterIntake) : null,
       stressLevel: stressLevel ? Number(stressLevel) : null,
       mood: mood || null,
-      proteinConsumed: proteinConsumed ? Number(proteinConsumed) : null,
       waistCircumference: waistCircumference ? Number(waistCircumference) : null,
     },
     create: {
       date,
       weight: weight ? Number(weight) : null,
-      caloriesConsumed: caloriesConsumed ? Number(caloriesConsumed) : null,
       caloriesBurned: caloriesBurned ? Number(caloriesBurned) : null,
-      trainingType,
+      trainingType: trainingType || 'Descanso',
       sleepHours: sleepHours ? Number(sleepHours) : null,
       waterIntake: waterIntake ? Number(waterIntake) : null,
       stressLevel: stressLevel ? Number(stressLevel) : null,
       mood: mood || null,
-      proteinConsumed: proteinConsumed ? Number(proteinConsumed) : null,
       waistCircumference: waistCircumference ? Number(waistCircumference) : null,
     },
   });
+
+  // Sincroniza calorias e proteínas calculadas a partir das refeições do dia
+  await syncDailyLogFromMeals(date);
 
   const allLogsForCalculation = await prisma.dailyLog.findMany({
     orderBy: { date: 'desc' },

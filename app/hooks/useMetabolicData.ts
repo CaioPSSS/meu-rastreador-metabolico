@@ -39,14 +39,12 @@ export interface SetupFormState {
 export interface LogFormState {
   date: string;
   weight: string;
-  caloriesConsumed: string;
   caloriesBurned: string;
   trainingType: string;
   sleepHours: string;
   waterIntake: string;
   stressLevel: string;
   mood: string;
-  proteinConsumed: string;
   waistCircumference: string;
 }
 
@@ -99,17 +97,20 @@ export function useMetabolicData(
   }, [initialSettings]);
 
   async function addLog(logForm: LogFormState) {
+    // Preservar caloriesConsumed e proteinConsumed do log existente (gerido pelo MealTracker)
+    const existingLog = logs.find((l) => l.date === logForm.date);
+
     const optimisticLog: Log = {
       date: logForm.date,
       weight: logForm.weight ? Number(logForm.weight) : null,
-      caloriesConsumed: logForm.caloriesConsumed ? Number(logForm.caloriesConsumed) : null,
+      caloriesConsumed: existingLog?.caloriesConsumed ?? null,
       caloriesBurned: logForm.caloriesBurned ? Number(logForm.caloriesBurned) : null,
       trainingType: logForm.trainingType,
       sleepHours: logForm.sleepHours ? Number(logForm.sleepHours) : null,
       waterIntake: logForm.waterIntake ? Number(logForm.waterIntake) : null,
       stressLevel: logForm.stressLevel ? Number(logForm.stressLevel) : null,
       mood: logForm.mood || null,
-      proteinConsumed: logForm.proteinConsumed ? Number(logForm.proteinConsumed) : null,
+      proteinConsumed: existingLog?.proteinConsumed ?? null,
       waistCircumference: logForm.waistCircumference ? Number(logForm.waistCircumference) : null,
     };
 
