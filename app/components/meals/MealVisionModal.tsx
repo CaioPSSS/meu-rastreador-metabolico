@@ -17,6 +17,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { AnalyzedFoodComponent, MealVisionResult } from '@/lib/ai/mealVisionEstimate';
+import { compressImageFile } from '@/lib/utils/imageCompressor';
 import ModalPortal from '../ModalPortal';
 
 interface MealVisionModalProps {
@@ -52,7 +53,7 @@ export default function MealVisionModal({
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -61,13 +62,13 @@ export default function MealVisionModal({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      setImagePreview(base64);
+    try {
+      const compressedBase64 = await compressImageFile(file);
+      setImagePreview(compressedBase64);
       setError(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar imagem.');
+    }
   };
 
   const handleStartAnalysis = async () => {

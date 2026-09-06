@@ -115,11 +115,12 @@ export async function estimateMealFromVision(
     userContext ? `\n\nPISTA / CONTEXTO INFORMADO PELO USUÁRIO: "${userContext}"` : ''
   }`;
 
-  // ── Tentativa 1: OpenRouter (Modelo Primário Custo-Benefício: Google Gemini 3.6 Flash / 2.0 Flash)
+  // ── Tentativa 1: OpenRouter (Modelos Multimodais: Google Gemini 3.6 / 2.5 Flash)
   if (openRouterKey) {
     const primaryModels = [
       'google/gemini-3.6-flash',
-      'google/gemini-2.0-flash-001',
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
       'anthropic/claude-sonnet-4.6',
       'minimax/minimax-m3',
     ];
@@ -158,6 +159,9 @@ export async function estimateMealFromVision(
               return parsed;
             }
           }
+        } else {
+          const errBody = await response.text();
+          console.warn(`[mealVisionEstimate] Modelo ${model} retornou status ${response.status}:`, errBody);
         }
       } catch (modelErr) {
         console.warn(`[mealVisionEstimate] Modelo ${model} falhou, tentando próximo:`, modelErr);
@@ -170,7 +174,7 @@ export async function estimateMealFromVision(
     try {
       const rawBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

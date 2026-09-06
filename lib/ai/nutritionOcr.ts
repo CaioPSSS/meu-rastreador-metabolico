@@ -43,95 +43,128 @@ Instruções:
   "notes": "Valores extraídos da porção de 30g"
 }`;
 
+const OCR_MODELS = [
+  'google/gemini-2.5-flash-lite',
+  'google/gemini-2.5-flash',
+  'google/gemini-3.6-flash',
+];
+
 export async function extractNutritionFromImage(base64Image: string): Promise<ExtractedNutritionLabel> {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!openRouterKey && !geminiKey) {
+    throw new Error('Chave de API de IA (OPENROUTER_API_KEY) não configurada no servidor.');
+  }
 
   // Garante prefixo data URL se não houver
   const formattedImageUrl = base64Image.startsWith('data:')
     ? base64Image
     : `data:image/jpeg;base64,${base64Image}`;
 
-  // Tentativa 1: OpenRouter com modelo multimodal
+  // Tentativa 1: OpenRouter com modelos multimodais econômicos e rápidos
   if (openRouterKey) {
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app',
-          'X-Title': 'Metabolic Tracker Nutrition OCR',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-001',
-          messages: [
-            { role: 'system', content: OCR_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Extraia os dados nutricionais desta tabela:' },
-                { type: 'image_url', image_url: { url: formattedImageUrl } },
-              ],
-            },
-          ],
-        }),
-      });
+    for (const model of OCR_MODELS) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openRouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://meu-rastreador-metabolico.vercel.app',
+            'X-Title': 'Metabolic Tracker Nutrition OCR',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: OCR_SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Extraia os dados nutricionais desta tabela:' },
+                  { type: 'image_url', image_url: { url: formattedImageUrl } },
+                ],
+              },
+            ],
+          }),
+        });
 
-      if (response.ok) {
-        const result = await response.json();
-        const content = result.choices?.[0]?.message?.content;
-        if (content) {
-          const parsed = parseOcrJson(content);
-          if (parsed) return parsed;
+        if (response.ok) {
+          const result = await response.json();
+          const content = result.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = parseOcrJson(content);
+            if (parsed) return parsed;
+          }
+        } else {
+          const errBody = await response.text();
+          console.warn(`[nutritionOcr] OpenRouter modelo ${model} falhou com status ${response.status}:`, errBody);
         }
+      } catch (err) {
+        console.warn(`[nutritionOcr] OpenRouter modelo ${model} erro de requisição:`, err);
       }
-    } catch (err) {
-      console.warn('[nutritionOcr] OpenRouter falhou, tentando fallback:', err);
     }
   }
 
   // Tentativa 2: Direct Gemini API se GEMINI_API_KEY configurada
   if (geminiKey) {
-    try {
-      const rawBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: `${OCR_SYSTEM_PROMPT}\n\nExtraia os dados da tabela nutricional:` },
-                  {
-                    inline_data: {
-                      mime_type: 'image/jpeg',
-                      data: rawBase64,
-                    },
-                  },
-                ],
-              },
-            ],
-          }),
-        },
-      );
+    const directGeminiModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    const rawBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
 
-      if (response.ok) {
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = parseOcrJson(text);
-          if (parsed) return parsed;
+    for (const gModel of directGeminiModels) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: `${OCR_SYSTEM_PROMPT}\n\nExtraia os dados da tabela nutricional:` },
+                    {
+                      inline_data: {
+                        mime_type: 'image/jpeg',
+                        data: rawBase64,
+                      },
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            const parsed = parseOcrJson(text);
+            if (parsed) return parsed;
+          }
+        } else {
+          const errBody = await response.text();
+          console.warn(`[nutritionOcr] Direct Gemini modelo ${gModel} falhou com status ${response.status}:`, errBody);
         }
+      } catch (err) {
+        console.error(`[nutritionOcr] Direct Gemini modelo ${gModel} erro:`, err);
       }
-    } catch (err) {
-      console.error('[nutritionOcr] Gemini direto falhou:', err);
     }
   }
 
   throw new Error('Não foi possível extrair a tabela nutricional da imagem. Verifique a iluminação e enquadramento da foto.');
+}
+
+function cleanNumber(val: unknown, fallback: number = 0): number {
+  if (val === undefined || val === null) return fallback;
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  if (typeof val === 'string') {
+    const cleaned = val.replace(',', '.').replace(/[^0-9.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? fallback : num;
+  }
+  return fallback;
 }
 
 function parseOcrJson(rawText: string): ExtractedNutritionLabel | null {
@@ -143,14 +176,14 @@ function parseOcrJson(rawText: string): ExtractedNutritionLabel | null {
     return {
       productName: String(data.productName || 'Alimento Identificado'),
       brand: data.brand ? String(data.brand) : undefined,
-      servingSize: Number(data.servingSize) || 100,
+      servingSize: cleanNumber(data.servingSize, 100),
       servingUnit: String(data.servingUnit || 'g'),
-      calories: Number(data.calories) || 0,
-      protein: Number(data.protein) || 0,
-      carbs: Number(data.carbs) || 0,
-      fat: Number(data.fat) || 0,
-      fiber: data.fiber !== undefined ? Number(data.fiber) : undefined,
-      sodium: data.sodium !== undefined ? Number(data.sodium) : undefined,
+      calories: Math.round(cleanNumber(data.calories, 0)),
+      protein: Math.round(cleanNumber(data.protein, 0) * 10) / 10,
+      carbs: Math.round(cleanNumber(data.carbs, 0) * 10) / 10,
+      fat: Math.round(cleanNumber(data.fat, 0) * 10) / 10,
+      fiber: data.fiber !== undefined ? Math.round(cleanNumber(data.fiber, 0) * 10) / 10 : undefined,
+      sodium: data.sodium !== undefined ? Math.round(cleanNumber(data.sodium, 0)) : undefined,
       notes: data.notes ? String(data.notes) : undefined,
     };
   } catch {

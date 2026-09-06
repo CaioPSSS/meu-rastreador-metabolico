@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { X, Sparkles, Upload, Camera, Check, RefreshCw, AlertCircle } from 'lucide-react';
 import { CatalogFoodItem } from '@/lib/foodCatalog/search';
 import { ExtractedNutritionLabel } from '@/lib/ai/nutritionOcr';
+import { compressImageFile } from '@/lib/utils/imageCompressor';
 import ModalPortal from '../ModalPortal';
 
 interface NutritionOcrModalProps {
@@ -32,7 +33,7 @@ export default function NutritionOcrModal({
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -41,13 +42,17 @@ export default function NutritionOcrModal({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      setImagePreview(base64);
-      processImageOcr(base64);
-    };
-    reader.readAsDataURL(file);
+    try {
+      setAnalyzing(true);
+      setError(null);
+      // Comprime no cliente para evitar payload gigante na Vercel e acelerar upload
+      const compressedBase64 = await compressImageFile(file);
+      setImagePreview(compressedBase64);
+      await processImageOcr(compressedBase64);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar imagem.');
+      setAnalyzing(false);
+    }
   };
 
   const processImageOcr = async (base64Image: string) => {
@@ -232,20 +237,35 @@ export default function NutritionOcrModal({
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                     <span>Lendo valores nutricionais com IA...</span>
                   </div>
-                ) : (
+                ) : extractedData ? (
                   <span className="text-xs text-emerald-400 font-medium mt-1 flex items-center gap-1">
                     <Check className="h-3.5 w-3.5" /> Leitura concluída!
                   </span>
+                ) : (
+                  <span className="text-xs text-rose-400 font-medium mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3.5 w-3.5" /> Falha na leitura
+                  </span>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={resetCapture}
-                disabled={analyzing}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition"
-              >
-                Nova Foto
-              </button>
+              <div className="flex items-center gap-2">
+                {!analyzing && !extractedData && imagePreview && (
+                  <button
+                    type="button"
+                    onClick={() => processImageOcr(imagePreview)}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <RefreshCw className="h-3 w-3" /> Tentar Novamente
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={resetCapture}
+                  disabled={analyzing}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition"
+                >
+                  Nova Foto
+                </button>
+              </div>
             </div>
 
             {/* Formulário de Revisão Editável */}
