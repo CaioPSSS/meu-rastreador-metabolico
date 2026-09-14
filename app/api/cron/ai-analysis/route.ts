@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { runRecalibration } from '@/lib/recalibrationService';
 import { buildWeekSummary, computeMotorSignals } from '@/lib/motorSignals';
 
@@ -17,27 +18,19 @@ DIRETRIZES DE FORMATAÇÃO (Otimizado para WhatsApp):
 - Seja ultra direto. Sem introduções polidas, saudações ou encerramentos longos.
 - Use parágrafos curtos e objetivos.
 - Use *negrito* exclusivamente para destacar números, métricas e metas.
-- Use emojis APENAS como ícones estruturais para organizar os tópicos (ex: 📊, 🥩, ⚠️, 🎯, ⚙️).
+- Use emojis APENAS como ícones estruturais para organizar os tópicos (ex: 📊, 🥩, ⚠️, ⚙️, 🎯).
+- Se houver diretrizes prescritas no ciclo anterior, conecte o diagnóstico avaliando objetivamente a adesão antes de emitir novas diretrizes.
 
 ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
 📊 *Termodinâmica:* Avalie a reta de tendência real de peso vs. déficit acumulado (filtre o ruído de retenção de fluidos e glicogênio), focando no desempenho da semana e depois no desempenho acumulado.
 🥩 *Composição:* Julgue o aporte proteico e o risco de catabolismo frente ao desgaste do treino apresentado.
 ⚠️ *Sinal Clínico:* Correlacione o estresse/sono com possíveis estagnações (retenção hídrica por cortisol).
 ⚙️ *Decisão de Meta:* Informe a decisão do motor de recalibração e o raciocínio em 1-2 frases diretas. Se a meta foi ajustada, indique o novo valor.
-🎯 *Plano de Ação:* Forneça exatamente 3 diretrizes táticas, milimétricas e de alta eficiência para corrigir a rota na próxima semana.`;
+🎯 *Plano de Ação:* Se houver plano anterior, avalie em 1 frase se as diretrizes anteriores foram cumpridas. Em seguida, forneça exatamente 3 novas diretrizes táticas, milimétricas e de alta eficiência para a próxima semana.`;
 
 const SYSTEM_PROMPT = process.env.AI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT;
 
 // ---------------------------------------------------------------------------
-// Utilitários
-// ---------------------------------------------------------------------------
-
-function splitReportParagraphs(reportText: string): string[] {
-  return reportText
-    .split(/\r?\n\s*\r?\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
 
 /**
  * Extrai as diretrizes táticas da seção 🎯 do relatório narrativo.
@@ -184,10 +177,30 @@ export async function GET(request: NextRequest) {
 
     // ── Step 3: Construir prompt narrativo ───────────────────────────────────
     // Busca os últimos 14 logs para o payload narrativo (separado dos 21 do motor)
-    const narrativeLogs = await prisma.dailyLog.findMany({
-      orderBy: { date: 'desc' },
-      take: 14,
-    });
+    // e o último AiReport para dar continuidade e memória clínica à análise.
+    interface StoredRecalibration {
+      applied?: boolean;
+      newTarget?: number;
+      previousTarget?: number;
+      delta?: number;
+      reasoning?: string;
+    }
+
+    const [narrativeLogs, lastReport] = await Promise.all([
+      prisma.dailyLog.findMany({
+        orderBy: { date: 'desc' },
+        take: 14,
+      }),
+      prisma.aiReport.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          createdAt: true,
+          recommendations: true,
+          recalibration: true,
+          weekSummary: true,
+        },
+      }),
+    ]);
 
     const settingsForPayload = settings ?? await prisma.userSettings.findUnique({ where: { id: 'singleton' } });
 
@@ -230,11 +243,46 @@ export async function GET(request: NextRequest) {
     : `MANTIDA em ${recalibrationResult.previousTarget} kcal`}`
       : '';
 
+    // Memória histórica da análise da semana anterior
+    let previousMemoryContext = '';
+    if (lastReport) {
+      const prevDate = lastReport.createdAt instanceof Date
+        ? lastReport.createdAt.toISOString().slice(0, 10)
+        : String(lastReport.createdAt).slice(0, 10);
+      const prevRecal = lastReport.recalibration as StoredRecalibration | null;
+      const prevRecs = (Array.isArray(lastReport.recommendations) ? lastReport.recommendations : []) as string[];
+
+      const memoryLines: string[] = [
+        `\n\nMEMÓRIA DA SEMANA ANTERIOR (Relatório gerado em ${prevDate}):`,
+      ];
+
+      if (prevRecal) {
+        memoryLines.push(
+          `- Meta calórica na semana passada: ${prevRecal.applied ? `Ajustada para ${prevRecal.newTarget} kcal (${prevRecal.delta && prevRecal.delta > 0 ? '+' : ''}${prevRecal.delta} kcal)` : `Mantida em ${prevRecal.previousTarget} kcal`}`,
+          `- Raciocínio clínico anterior: ${prevRecal.reasoning}`,
+        );
+      }
+
+      if (prevRecs.length > 0) {
+        memoryLines.push(
+          `- Diretrizes táticas prescritas na semana passada para cumprimento nesta semana:`,
+          ...prevRecs.map((rec, i) => `  ${i + 1}. ${rec}`),
+        );
+      }
+
+      memoryLines.push(
+        `AVALIAÇÃO DE ADESÃO: Compare os dados dos últimos dias com as diretrizes acima e avalie se houve adesão às diretrizes passadas.`
+      );
+
+      previousMemoryContext = memoryLines.join('\n');
+    }
+
     const narrativePrompt =
       `Analise a seguinte janela metabólica das últimas 2 semanas. Trate dados ausentes como lacunas — não invente valores.` +
       `\n\nHistórico das últimas 2 semanas:\n${JSON.stringify(leanPayload, null, 2)}` +
       `\n\nConfiguração e meta do usuário:\n${JSON.stringify(settingsPayload, null, 2)}` +
-      recalibrationContext;
+      recalibrationContext +
+      previousMemoryContext;
 
     // ── Step 3 (cont.): Gerar relatório narrativo ────────────────────────────
     const reportText = await callOpenRouterNarrative(apiKey, narrativePrompt);
@@ -242,29 +290,46 @@ export async function GET(request: NextRequest) {
     const recommendations = extractRecommendations(reportText);
 
     // ── Step 4: Persistir AiReport com memória acumulativa ───────────────────
-    await (prisma as any).aiReport.create({
+    await prisma.aiReport.create({
       data: {
         content: reportText,
         isRead: false,
-        weekSummary: weekSummary ?? undefined,
+        weekSummary: (weekSummary as unknown as Prisma.InputJsonValue) ?? undefined,
         recommendations: recommendations.length > 0 ? recommendations : undefined,
-        recalibration: recalibrationResult ?? undefined,
+        recalibration: (recalibrationResult as unknown as Prisma.InputJsonValue) ?? undefined,
       },
     });
 
-    // ── Step 5: WhatsApp ─────────────────────────────────────────────────────
+    // ── Step 5: WhatsApp (CallMeBot) ──────────────────────────────────────────
+    // Envio como mensagem única para respeitar o rate limit do CallMeBot (1 msg / 2s)
+    // e garantir que o relatório chegue de forma coesa e ordenada no WhatsApp.
     const whatsappNumber = process.env.WHATSAPP_NUMBER;
     const callMeBotKey = process.env.CALLMEBOT_API_KEY;
 
     if (whatsappNumber && callMeBotKey) {
-      const paragraphs = splitReportParagraphs(reportText);
-      for (const paragraph of paragraphs) {
-        const url = `https://api.callmebot.com/whatsapp.php?phone=${whatsappNumber}&text=${encodeURIComponent(paragraph)}&apikey=${callMeBotKey}`;
-        try {
-          await fetch(url);
-        } catch (notificationError) {
-          console.error('[cron/ai-analysis] Falha ao enviar WhatsApp.', notificationError);
+      const cleanPhone = whatsappNumber.replace(/\D/g, '');
+      const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodeURIComponent(reportText)}&apikey=${callMeBotKey}`;
+      try {
+        const response = await fetch(url, { method: 'GET' });
+        const responseText = await response.text();
+        const lowerResponse = responseText.toLowerCase();
+
+        if (
+          !response.ok ||
+          lowerResponse.includes('error') ||
+          lowerResponse.includes('rate limit') ||
+          lowerResponse.includes('invalid apikey')
+        ) {
+          console.error('[cron/ai-analysis] CallMeBot retornou aviso/erro no envio do WhatsApp:', {
+            status: response.status,
+            statusText: response.statusText,
+            responsePreview: responseText.slice(0, 300),
+          });
+        } else {
+          console.log('[cron/ai-analysis] WhatsApp enviado com sucesso via CallMeBot.');
         }
+      } catch (notificationError) {
+        console.error('[cron/ai-analysis] Falha de rede ao conectar com CallMeBot.', notificationError);
       }
     }
 

@@ -8,6 +8,7 @@ import MetabolicCharts from './MetabolicCharts';
 import RecentHistoryTable from './RecentHistoryTable';
 import MealTracker, { MealTotals } from './meals/MealTracker';
 import ModalPortal from './ModalPortal';
+import AiReportViewer from './AiReportViewer';
 import { useMetabolicData, Log, Settings, LogFormState, SetupFormState } from '@/app/hooks/useMetabolicData';
 import { getLocalISODate } from '@/lib/dateUtils';
 import { average, calcStreak, clamp, CALORIE_COMPLIANCE_MARGIN } from '@/lib/chartUtils';
@@ -432,10 +433,8 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
                 Ciente. Fechar e Arquivar.
               </button>
             </div>
-            <div className="mt-5 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-              <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
-                {unreadReport?.content}
-              </div>
+            <div className="mt-5 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
+              <AiReportViewer content={unreadReport?.content} />
             </div>
           </div>
         </div>

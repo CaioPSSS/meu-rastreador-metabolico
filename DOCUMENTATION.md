@@ -259,17 +259,20 @@ Esses gráficos usam Recharts e consomem os dados já carregados pelo hook.
 
 ### 5.4 Fluxo de análise semanal com IA (Pipeline de 5 steps)
 
-1. **Step 1** — O cron do Vercel dispara [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts) todo domingo às 20h.
+1. **Step 1** — O cron do Vercel dispara [app/api/cron/ai-analysis/route.ts](app/api/cron/ai-analysis/route.ts) toda segunda-feira às 02h de Salvador (05:00 UTC, expressão `"0 5 * * 1"`).
 2. **Step 2** — Motor determinístico calcula sinais (TDEE empírico, tendência EWMA, compliance calórico) e determina o `confidence level` com base na qualidade dos dados.
 3. **Step 3** — IA Árbitro ([lib/recalibrationService.ts](lib/recalibrationService.ts)) decide se a meta deve mudar:
    - Se `confidence === 'low'`: IA não é chamada, meta mantida.
    - Se `confidence >= 'medium'`: IA recebe sinais + histórico das últimas 3 semanas e responde com `{ shouldAdjust, newTarget, delta, reasoning }`.
    - Validação aritmética server-side: clamp [1200, 5000], delta máximo ±200 kcal.
    - Se válido e `shouldAdjust`: atualiza `UserSettings.currentCalorieTarget` e `recalcReason = 'ai_decision'`.
-4. **Step 4** — IA Narrativo gera relatório clínico semanal com a decisão de meta incluída na seção `⚙️ Decisão de Meta:`.
-5. **Step 5** — Cria registro em `AiReport` com `weekSummary`, `recommendations` e `recalibration`.
-6. **Step 6** — Envia o relatório por WhatsApp via CallMeBot.
-7. O dashboard consulta os relatórios não lidos e exibe o modal.
+4. **Step 4** — IA Narrativo gera relatório clínico semanal:
+   - Consulta o último `AiReport` para resgatar a decisão de meta passada e as diretrizes táticas prescritas anteriormente.
+   - Avalia a adesão do usuário ao plano da semana anterior antes de definir novas diretrizes.
+   - Inclui a decisão de recalibração na seção `⚙️ Decisão de Meta:` e prescreve 3 novas diretrizes táticas em `🎯 Plano de Ação:`.
+5. **Step 5** — Cria registro em `AiReport` com `weekSummary`, `recommendations` extraídas e `recalibration`.
+6. **Step 6** — Envia o relatório por WhatsApp via CallMeBot em mensagem única (sem fragmentação em múltiplos parágrafos, prevenindo bloqueio por rate limit) e verifica a integridade do retorno.
+7. O dashboard consulta os relatórios não lidos e exibe o modal estruturado.
 
 ### 5.5 Recalibração manual
 
@@ -292,13 +295,15 @@ Este componente é o centro da experiência. Ele:
 - gerencia o estado de relatório não lido;
 - renderiza o sino de notificações e o modal.
 
-### 6.2 Modal de relatório
+### 6.2 Modal de relatório e AiReportViewer
 
 O modal de relatório:
 - é montado apenas quando `unreadReport !== null`;
-- mostra o conteúdo bruto do relatório em formato de texto com whitespace preservado;
-- usa Tailwind para aparência clínica e escura;
-- desabilita o botão de fechamento enquanto a requisição de marcação como lido está em andamento.
+- utiliza o componente [app/components/AiReportViewer.tsx](app/components/AiReportViewer.tsx);
+- interpreta automaticamente negritos do WhatsApp (`*texto*`) e do Markdown (`**texto**`), convertendo-os em elementos visuais destacados sem expor asteriscos crus;
+- divide o relatório nas dimensões clínicas (Termodinâmica, Composição, Sinal Clínico, Meta Calórica e Plano de Ação em lista numerada);
+- usa Tailwind para aparência clínica, cards translúcidos e ambientação dark mode;
+- desabilita o botão de arquivamento enquanto a requisição de marcação como lido está em andamento.
 
 ### 6.3 Gráficos
 
@@ -330,11 +335,11 @@ Este endpoint é sensível e deve ser tratado com cuidado.
 
 Regras de execução:
 - valida `CRON_SECRET`
-- usa `maxDuration = 30` para o runtime serverless do Vercel
-- consulta os últimos 14 dias de logs
-- compacta o payload antes de enviar para o Gemini
-- salva o relatório em AiReport
-- tenta enviar WhatsApp sem bloquear o salvamento do relatório em caso de falha
+- usa `maxDuration = 300` para o runtime serverless do Vercel
+- consulta os últimos 14 dias de logs e o último `AiReport` para memória acumulativa contínua
+- compacta o payload antes de enviar para a IA
+- salva o relatório em `AiReport` com snapshot numérico e diretrizes táticas extraídas
+- envia mensagem única para o WhatsApp via CallMeBot (com sanitização de número e checagem de erros), sem bloquear a rota em caso de falha externa
 
 ### 7.4 [app/api/reports/unread/route.ts](app/api/reports/unread/route.ts)
 
