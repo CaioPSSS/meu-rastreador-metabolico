@@ -54,19 +54,19 @@ interface ParsedSection {
  * Divide o conteúdo do relatório nas 5 dimensões clínicas se os emojis estiverem presentes.
  */
 function parseReportContent(content: string): ParsedSection[] | null {
-  const emojis = ['📊', '🥩', '⚠️', '⚙️', '🎯'];
+  const emojis = ['📊', '🥩', '⚠️', '⚠', '⚙️', '⚙', '🎯'];
   const hasSections = emojis.some((e) => content.includes(e));
   if (!hasSections) return null;
 
-  // Regex para fatiar o texto onde cada seção começa com um dos emojis
-  const sectionPattern = /(?=[📊🥩⚠️⚙️🎯])/g;
+  // Regex com alternância e flag /u para preservar pares substitutos (surrogate pairs) de emojis
+  const sectionPattern = /(?=(?:📊|🥩|⚠️|⚠|⚙️|⚙|🎯))/u;
   const rawChunks = content.split(sectionPattern).map((c) => c.trim()).filter(Boolean);
 
   const parsed: ParsedSection[] = [];
 
   for (const chunk of rawChunks) {
-    if (chunk.startsWith('📊')) {
-      const body = cleanSectionTitle(chunk, '📊');
+    if (/^📊/u.test(chunk)) {
+      const body = cleanSectionTitle(chunk);
       parsed.push({
         id: 'thermo',
         emoji: '📊',
@@ -77,8 +77,8 @@ function parseReportContent(content: string): ParsedSection[] | null {
         bgClass: 'bg-slate-900/60',
         body,
       });
-    } else if (chunk.startsWith('🥩')) {
-      const body = cleanSectionTitle(chunk, '🥩');
+    } else if (/^🥩/u.test(chunk)) {
+      const body = cleanSectionTitle(chunk);
       parsed.push({
         id: 'composition',
         emoji: '🥩',
@@ -89,8 +89,8 @@ function parseReportContent(content: string): ParsedSection[] | null {
         bgClass: 'bg-slate-900/60',
         body,
       });
-    } else if (chunk.startsWith('⚠️')) {
-      const body = cleanSectionTitle(chunk, '⚠️');
+    } else if (/^(?:⚠️|⚠)/u.test(chunk)) {
+      const body = cleanSectionTitle(chunk);
       parsed.push({
         id: 'clinical',
         emoji: '⚠️',
@@ -101,8 +101,8 @@ function parseReportContent(content: string): ParsedSection[] | null {
         bgClass: 'bg-slate-900/60',
         body,
       });
-    } else if (chunk.startsWith('⚙️')) {
-      const body = cleanSectionTitle(chunk, '⚙️');
+    } else if (/^(?:⚙️|⚙)/u.test(chunk)) {
+      const body = cleanSectionTitle(chunk);
       parsed.push({
         id: 'recalibration',
         emoji: '⚙️',
@@ -113,8 +113,8 @@ function parseReportContent(content: string): ParsedSection[] | null {
         bgClass: 'bg-slate-900/60',
         body,
       });
-    } else if (chunk.startsWith('🎯')) {
-      const rawBody = cleanSectionTitle(chunk, '🎯');
+    } else if (/^🎯/u.test(chunk)) {
+      const rawBody = cleanSectionTitle(chunk);
       const lines = rawBody.split('\n').map((l) => l.trim()).filter(Boolean);
       const actionItems: string[] = [];
       const introLines: string[] = [];
@@ -156,10 +156,11 @@ function parseReportContent(content: string): ParsedSection[] | null {
   return parsed.length > 0 ? parsed : null;
 }
 
-function cleanSectionTitle(chunk: string, emoji: string): string {
-  let text = chunk.replace(emoji, '').trim();
-  // Remove título inicial colado no emoji, ex: *Termodinâmica:* ou **Termodinâmica:**
-  text = text.replace(/^(\*|\*\*)?[^:\n\r]+(\*|\*\*)?:?\s*/i, '').trim();
+function cleanSectionTitle(chunk: string): string {
+  // Remove emoji inicial e espaços
+  let text = chunk.replace(/^(?:📊|🥩|⚠️|⚠|⚙️|⚙|🎯)\s*/u, '').trim();
+  // Remove título inicial: *Título:* ou **Título:** ou *Título*: ou Título: e eventuais traços/hifens
+  text = text.replace(/^(\*{0,2})[^\n\r:*]+(?::?\*{0,2}:?\*{0,2})\s*(-|–|—)?\s*/i, '').trim();
   return text || chunk;
 }
 
