@@ -1,7 +1,7 @@
 'use client';
 
-import { Flame, Dumbbell, Wheat, Droplet } from 'lucide-react';
-
+import { EXERCISE_EATBACK_FACTOR } from '@/lib/metabolicAlgo';
+import { Flame, Dumbbell, Wheat, Droplet, Activity } from 'lucide-react';
 interface MacroTotals {
   calories: number;
   protein: number;
@@ -14,15 +14,20 @@ interface MacroSummaryBarProps {
   totals: MacroTotals;
   calorieTarget: number;
   userWeight?: number | null;
+  caloriesBurned?: number | null;
 }
 
 export default function MacroSummaryBar({
   totals,
   calorieTarget,
   userWeight,
+  caloriesBurned,
 }: MacroSummaryBarProps) {
-  const calPct = Math.min(Math.round((totals.calories / Math.max(calorieTarget, 1)) * 100), 150);
-  const remainingCal = calorieTarget - totals.calories;
+  const exerciseBonus = Math.round((caloriesBurned ?? 0) * EXERCISE_EATBACK_FACTOR);
+  const adjustedTarget = calorieTarget + exerciseBonus;
+  
+  const calPct = Math.min(Math.round((totals.calories / Math.max(adjustedTarget, 1)) * 100), 150);
+  const remainingCal = adjustedTarget - totals.calories;
 
   // Meta proteica estimada: 2.0g/kg ou padrão de 150g
   const estimatedProteinTarget = userWeight ? Math.round(userWeight * 2.0) : 150;
@@ -55,7 +60,7 @@ export default function MacroSummaryBar({
                 {totals.calories.toLocaleString('pt-BR')}
               </span>
               <span className="text-sm font-medium text-slate-500">
-                / {calorieTarget.toLocaleString('pt-BR')} kcal
+                / {adjustedTarget.toLocaleString('pt-BR')} kcal
               </span>
             </div>
           </div>
@@ -73,6 +78,12 @@ export default function MacroSummaryBar({
               </span>
             )}
           </div>
+          {exerciseBonus > 0 && (
+            <div className="px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-xs font-medium text-orange-300 flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5" />
+              <span>+{exerciseBonus} kcal exercício</span>
+            </div>
+          )}
         </div>
       </div>
 

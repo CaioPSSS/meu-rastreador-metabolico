@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Flame, TrendingDown, TrendingUp, Droplets, Heart, Calendar } from 'lucide-react';
 import { Log, Settings } from '@/app/hooks/useMetabolicData';
+import { EXERCISE_EATBACK_FACTOR } from '@/lib/metabolicAlgo';
 import {
   average, calcEWMASlopeForChart, calculateEMAForChart, clampScore,
   formatDateShort, ENERGY_PER_KG_MIXED, PROTEIN_MIN_PER_KG, SLEEP_TARGET_H, WATER_TARGET_ML
@@ -72,7 +73,9 @@ export default function MetabolicCharts({ logs, settings }: MetabolicChartsProps
   // ── 2. Balanço Energético Acumulado ────────────────────────────────────────
   let cumulativeDeficit = 0;
   const deficitData = recentLogs.map((log) => {
-    const deficit = log.caloriesConsumed !== null ? settings.currentCalorieTarget - log.caloriesConsumed : 0;
+    const exerciseBonus = Math.round((log.caloriesBurned ?? 0) * EXERCISE_EATBACK_FACTOR);
+    const adjustedDayTarget = settings.currentCalorieTarget + exerciseBonus;
+    const deficit = log.caloriesConsumed !== null ? adjustedDayTarget - log.caloriesConsumed : 0;
     cumulativeDeficit += deficit;
     return {
       date: formatDateShort(log.date),

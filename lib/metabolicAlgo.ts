@@ -11,6 +11,17 @@ type SetupData = {
 };
 
 // ---------------------------------------------------------------------------
+// Fator de Eat-Back de Exercício
+//
+// Define qual percentual das calorias de exercício é adicionado ao orçamento
+// diário de consumo. 65% é um valor equilibrado para dados estruturados
+// (Strava, cálculos baseados em séries/RPE/peso/tempo), que são mais precisos
+// que wearables genéricos (erro médio 25-40%), mas ainda possuem margem de
+// incerteza na conversão metabólica individual.
+// ---------------------------------------------------------------------------
+export const EXERCISE_EATBACK_FACTOR = 0.65;
+
+// ---------------------------------------------------------------------------
 // 1. Cálculo Inicial Baseado em Fórmulas Clínicas (Mifflin-St Jeor)
 // ---------------------------------------------------------------------------
 export function calculateInitialTarget(data: SetupData): number {

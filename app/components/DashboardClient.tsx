@@ -246,6 +246,11 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const activeCalories = latestLogWithNutrition?.caloriesConsumed ?? null;
   const activeCaloriesDate = latestLogWithNutrition?.date ?? (latestLog?.date || getLocalISODate());
 
+  // Busca caloriesBurned do dia selecionado para o MealTracker
+  const selectedMealDate = logForm.date || getLocalISODate();
+  const selectedDayLog = logs.find((l) => l.date === selectedMealDate);
+  const selectedDayCaloriesBurned = selectedDayLog?.caloriesBurned ?? null;
+
   // ── Alertas clínicos ──────────────────────────────────────────────────────
   const alerts: string[] = [];
 
@@ -467,6 +472,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
         onDateChange={(newDate) => setLogForm((prev) => ({ ...prev, date: newDate }))}
         calorieTarget={settings.currentCalorieTarget}
         userWeight={latestLog?.weight ?? null}
+        caloriesBurned={selectedDayCaloriesBurned}
         onMealsUpdated={refresh}
         onTotalsChange={setMealTotals}
       />

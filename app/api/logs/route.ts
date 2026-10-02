@@ -64,9 +64,15 @@ export async function POST(request: Request) {
 
   const settings = await prisma.userSettings.findMany();
 
-  // Gate semanal: só recalcula a meta se passaram >= 7 dias e há >= 4 pesagens
-  // Isso resolve a oscilação diária causada por flutuações de retenção hídrica.
-  if (allLogsForCalculation.length >= 14 && settings.length > 0) {
+  // Gate semanal: só recalcula a meta se passaram >= 7 dias e há >= 4 pesagens.
+  // IMPORTANTE: Só dispara recálculo se o log salvo é de hoje ou ontem.
+  // Isso evita recálculo indevido ao editar registros históricos.
+  const logDate = new Date(`${date}T00:00:00Z`);
+  const now = new Date();
+  const daysDiff = Math.floor((now.getTime() - logDate.getTime()) / 86_400_000);
+  const isRecentLog = daysDiff <= 1;
+
+  if (isRecentLog && allLogsForCalculation.length >= 14 && settings.length > 0) {
     const gate = shouldRecalculate(settings[0], allLogsForCalculation);
 
     if (gate.allowed) {
@@ -75,6 +81,7 @@ export async function POST(request: Request) {
         where: { id: 'singleton' },
         data: {
           currentCalorieTarget: newTarget,
+          previousCalorieTarget: settings[0].currentCalorieTarget,
           lastRecalcAt: new Date(),
           recalcReason: gate.reason,
         },

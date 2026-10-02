@@ -15,6 +15,8 @@ export interface MotorSignals {
   avgProteinPerKg: number | null;
   weightEntriesCount: number;
   calorieEntriesCount: number;
+  avgExerciseBurn: number | null;   // Média de kcal gastas em dias de treino
+  trainingDaysCount: number;        // Quantidade de dias de treino nos últimos 14 dias
   confidence: ConfidenceLevel; // Determinístico — baseado em qualidade dos dados
 }
 
@@ -91,6 +93,8 @@ export function computeMotorSignals(
       avgProteinPerKg: null,
       weightEntriesCount,
       calorieEntriesCount,
+      avgExerciseBurn: null,
+      trainingDaysCount: 0,
       confidence,
     };
   }
@@ -130,6 +134,14 @@ export function computeMotorSignals(
       ? parseFloat((avgProtein / avgWeight).toFixed(2))
       : null;
 
+  // Dados de exercício para contexto da IA árbitro
+  const trainingLogs = last14.filter(
+    (l) => l.caloriesBurned && l.caloriesBurned > 0 && l.trainingType !== 'Descanso'
+  );
+  const trainingDaysCount = trainingLogs.length;
+  const exerciseBurnValues = trainingLogs.map((l) => l.caloriesBurned as number);
+  const avgExerciseBurn = safeAvg(exerciseBurnValues);
+
   return {
     tdeeEmpirical,
     weightTrendKgPerWeek,
@@ -138,6 +150,8 @@ export function computeMotorSignals(
     avgProteinPerKg,
     weightEntriesCount,
     calorieEntriesCount,
+    avgExerciseBurn: avgExerciseBurn !== null ? Math.round(avgExerciseBurn) : null,
+    trainingDaysCount,
     confidence,
   };
 }

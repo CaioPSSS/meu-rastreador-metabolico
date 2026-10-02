@@ -37,7 +37,8 @@ REGRAS OBRIGATÓRIAS:
 3. Se o compliance calórico for < 70%, a causa provável é aderência comportamental, não meta errada. Nesse caso, NÃO ajuste — informe o diagnóstico.
 4. Se a tendência de peso já estiver dentro de 50% da taxa desejada, mantenha a meta.
 5. Justifique em exatamente 2 frases, citando os números específicos que motivaram a decisão.
-6. Retorne APENAS JSON válido, sem markdown, sem texto adicional fora do JSON.`;
+6. Retorne APENAS JSON válido, sem markdown, sem texto adicional fora do JSON.
+7. O usuário recebe um bônus diário de 65% das calorias queimadas em exercício (eat-back equilibrado, dados do Strava e cálculos baseados em séries/RPE/peso). Considere isso ao avaliar se a meta calórica BASE precisa de ajuste — a meta base é o alvo SEM exercício.`;
 
 // ---------------------------------------------------------------------------
 // Construção do prompt de arbitragem
@@ -59,6 +60,7 @@ function buildArbiterPrompt(
 - Compliance calórico: ${signals.calorieCompliance}% (dias com consumo dentro de ±150 kcal da meta)
 - Compliance proteico: ${signals.avgProteinPerKg ?? 'insuficiente'} g/kg (referência: ≥1.6 g/kg)
 - Qualidade dos dados: ${signals.confidence.toUpperCase()} (${signals.calorieEntriesCount} registros calóricos, ${signals.weightEntriesCount} pesagens nos últimos 14 dias)
+- Gasto médio de exercício (dias de treino): ${signals.avgExerciseBurn ?? 'sem dados'} kcal/dia (${signals.trainingDaysCount ?? 0} dias de treino nos últimos 14 dias). Fator eat-back de 65% é aplicado ao orçamento diário visível do usuário.
 - Meta calórica atual: ${settings.currentCalorieTarget} kcal/dia
 - Objetivo: ${settings.goal} | Taxa semanal desejada: ${settings.weeklyRate} kg/semana
 
@@ -185,6 +187,33 @@ export async function runRecalibration(apiKey: string): Promise<{
 
   if (!settings) throw new Error('[recalibrationService] UserSettings não encontrado.');
 
+  // Gate temporal: evitar duplo-recálculo (motor determinístico + IA árbitro)
+  // Se a meta já foi ajustada nos últimos 3 dias, pular recalibração.
+  if (settings.lastRecalcAt) {
+    const daysSinceLastRecalc = Math.floor(
+      (Date.now() - new Date(settings.lastRecalcAt).getTime()) / 86_400_000
+    );
+    if (daysSinceLastRecalc < 3) {
+      const baseResult: RecalibrationResult = {
+        confidence: 'low',
+        previousTarget: settings.currentCalorieTarget,
+        newTarget: settings.currentCalorieTarget,
+        delta: 0,
+        reasoning:
+          `Meta já foi recalculada há ${daysSinceLastRecalc} dia(s) ` +
+          `(motivo: '${settings.recalcReason ?? 'desconhecido'}'). ` +
+          `Aguardando mínimo de 3 dias entre ajustes para evitar oscilação.`,
+        shouldAdjust: false,
+        applied: false,
+        appliedAt: null,
+      };
+      // Still compute signals and summary for the report even if not recalibrating
+      const signals = computeMotorSignals(logs, settings);
+      const weekSummary = buildWeekSummary(logs, signals);
+      return { result: baseResult, signals, weekSummary };
+    }
+  }
+
   // 2. Calcular sinais determinísticos
   const signals = computeMotorSignals(logs, settings);
   const weekSummary = buildWeekSummary(logs, signals);
@@ -269,6 +298,7 @@ export async function runRecalibration(apiKey: string): Promise<{
       where: { id: 'singleton' },
       data: {
         currentCalorieTarget: result.newTarget,
+        previousCalorieTarget: settings.currentCalorieTarget,
         lastRecalcAt: new Date(),
         recalcReason: 'ai_decision',
       },

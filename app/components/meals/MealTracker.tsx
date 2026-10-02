@@ -32,6 +32,7 @@ interface MealTrackerProps {
   onDateChange?: (newDate: string) => void;
   calorieTarget: number;
   userWeight?: number | null;
+  caloriesBurned?: number | null;
   onMealsUpdated?: () => void;
   onTotalsChange?: (totals: MealTotals) => void;
 }
@@ -41,6 +42,7 @@ export default function MealTracker({
   onDateChange,
   calorieTarget,
   userWeight,
+  caloriesBurned,
   onMealsUpdated,
   onTotalsChange,
 }: MealTrackerProps) {
@@ -227,6 +229,7 @@ export default function MealTracker({
         totals={totals}
         calorieTarget={calorieTarget}
         userWeight={userWeight}
+        caloriesBurned={caloriesBurned}
       />
 
       {/* ── Lista de Cards de Refeições ────────────────────────────────────── */}
