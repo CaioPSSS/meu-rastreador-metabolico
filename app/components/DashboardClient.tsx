@@ -12,6 +12,7 @@ import AiReportViewer from './AiReportViewer';
 import { useMetabolicData, Log, Settings, LogFormState, SetupFormState } from '@/app/hooks/useMetabolicData';
 import { getLocalISODate } from '@/lib/dateUtils';
 import { average, calcStreak, clamp, CALORIE_COMPLIANCE_MARGIN } from '@/lib/chartUtils';
+import { EXERCISE_EATBACK_FACTOR } from '@/lib/metabolicAlgo';
 
 interface DashboardClientProps {
   initialSettings: Settings | null;
@@ -79,17 +80,22 @@ function LoadingScreen() {
 function CalorieProgressBar({
   consumed,
   target,
+  caloriesBurned,
   date,
 }: {
   consumed: number | null;
   target: number;
+  caloriesBurned?: number | null;
   date: string;
 }) {
   if (consumed === null) return null;
 
-  const pct = clamp(Math.round((consumed / target) * 100), 0, 120);
-  const isOver = consumed > target * 1.1;
-  const isNear = consumed > target * 0.9;
+  const exerciseBonus = Math.round((caloriesBurned ?? 0) * EXERCISE_EATBACK_FACTOR);
+  const adjustedTarget = target + exerciseBonus;
+
+  const pct = clamp(Math.round((consumed / adjustedTarget) * 100), 0, 120);
+  const isOver = consumed > adjustedTarget * 1.1;
+  const isNear = consumed > adjustedTarget * 0.9;
 
   const barColor = isOver
     ? 'bg-rose-500'
@@ -116,7 +122,12 @@ function CalorieProgressBar({
       <div className="flex items-center justify-between mb-1.5 text-xs text-slate-400">
         <span className="uppercase tracking-wider">Calorias {dayLabel}</span>
         <span className={`font-semibold ${textColor}`}>
-          {consumed.toLocaleString('pt-BR')} / {target.toLocaleString('pt-BR')} kcal
+          {consumed.toLocaleString('pt-BR')} / {adjustedTarget.toLocaleString('pt-BR')} kcal
+          {exerciseBonus > 0 && (
+            <span className="text-orange-400 font-normal ml-1.5 text-[11px]">
+              (+{exerciseBonus} exercício)
+            </span>
+          )}
           <span className="ml-2 text-slate-500">({pct}%)</span>
         </span>
       </div>
@@ -166,6 +177,11 @@ function TodayMacroBar({ log }: { log: Log }) {
     log.sleepHours !== null && { label: 'Sono', value: `${log.sleepHours}h`, color: 'text-violet-400' },
     log.waterIntake !== null && { label: 'Água', value: `${log.waterIntake}ml`, color: 'text-cyan-400' },
     log.weight !== null && { label: 'Peso', value: `${log.weight}kg`, color: 'text-sky-300' },
+    log.caloriesBurned !== null && log.caloriesBurned > 0 && {
+      label: 'Treino',
+      value: `${log.caloriesBurned} kcal${log.trainingType && log.trainingType !== 'Descanso' ? ` (${log.trainingType})` : ''}`,
+      color: 'text-orange-400',
+    },
   ].filter(Boolean) as { label: string; value: string; color: string }[];
 
   if (items.length === 0) return null;
@@ -278,15 +294,23 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const selectedDayLog = logs.find((l) => l.date === selectedMealDate);
   const selectedDayCaloriesBurned = selectedDayLog?.caloriesBurned ?? null;
 
+  const todayIso = getLocalISODate();
+  const todayLog = logs.find((l) => l.date === todayIso);
+  const todayExerciseBonus = Math.round((todayLog?.caloriesBurned ?? 0) * EXERCISE_EATBACK_FACTOR);
+
   // ── Alertas clínicos ──────────────────────────────────────────────────────
   const alerts: string[] = [];
 
   if (settings && recentCalories.length >= 3) {
     const avgCal = average(recentCalories);
-    if (avgCal > settings.currentCalorieTarget + CALORIE_COMPLIANCE_MARGIN) {
-      alerts.push('A ingestão média está acima da meta. Revisite o planejamento das refeições.');
-    } else if (avgCal < settings.currentCalorieTarget - CALORIE_COMPLIANCE_MARGIN) {
-      alerts.push('A ingestão média está abaixo do alvo. Revise a consistência e a recuperação.');
+    const recentExerciseBonuses = recentLogs.map((l) => Math.round((l.caloriesBurned || 0) * EXERCISE_EATBACK_FACTOR));
+    const avgExerciseBonus = recentExerciseBonuses.length > 0 ? average(recentExerciseBonuses) : 0;
+    const effectiveTarget = settings.currentCalorieTarget + avgExerciseBonus;
+
+    if (avgCal > effectiveTarget + CALORIE_COMPLIANCE_MARGIN) {
+      alerts.push('A ingestão média está acima da meta ajustada com treinos. Revisite o planejamento das refeições.');
+    } else if (avgCal < effectiveTarget - CALORIE_COMPLIANCE_MARGIN) {
+      alerts.push('A ingestão média está abaixo do alvo ajustado para treinos. Revise a consistência e a recuperação.');
     }
   }
   if (recentSleep.length >= 3 && average(recentSleep) < 7) {
@@ -428,10 +452,15 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
 
             {/* Meta calórica */}
             <div className="bg-slate-900/60 border border-emerald-500/20 px-4 py-2.5 rounded-xl text-center shadow-[0_0_15px_rgba(52,211,153,0.07)]">
-              <span className="text-xs uppercase text-slate-400 block tracking-wider">Meta Atual</span>
+              <span className="text-xs uppercase text-slate-400 block tracking-wider">Meta Base</span>
               <span className="text-2xl font-black text-emerald-400">
                 {settings.currentCalorieTarget.toLocaleString('pt-BR')} kcal
               </span>
+              {todayExerciseBonus > 0 && (
+                <span className="text-[11px] text-orange-400 block font-medium mt-0.5">
+                  Hoje: {(settings.currentCalorieTarget + todayExerciseBonus).toLocaleString('pt-BR')} kcal
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -442,6 +471,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
             <CalorieProgressBar
               consumed={activeCalories}
               target={settings.currentCalorieTarget}
+              caloriesBurned={latestLogWithNutrition.caloriesBurned}
               date={activeCaloriesDate}
             />
             <TodayMacroBar log={latestLogWithNutrition} />

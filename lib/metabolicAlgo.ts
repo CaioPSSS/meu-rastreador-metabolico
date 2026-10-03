@@ -251,12 +251,17 @@ export function generateInsights(logs: DailyLog[], settings: UserSettings[]): st
 
   const insights: string[] = [];
 
+  // Considerar o bônus médio de exercício da semana (65% eat-back)
+  const weekExerciseBonuses = recent.map((l) => Math.round((l.caloriesBurned || 0) * EXERCISE_EATBACK_FACTOR));
+  const avgExerciseBonus = weekExerciseBonuses.length > 0 ? average(weekExerciseBonuses) : 0;
+  const effectiveTarget = currentTarget + avgExerciseBonus;
+
   if (weekCalories.length >= 4) {
     const avgCalories = average(weekCalories);
-    if (avgCalories > currentTarget + 150) {
-      insights.push('A media de ingestao esta acima da meta. Ajuste refeicoes para reduzir o excesso calorico.');
-    } else if (avgCalories < currentTarget - 150) {
-      insights.push('A ingestao media esta abaixo da meta. Atencao para nao reduzir demais se houver desconforto.');
+    if (avgCalories > effectiveTarget + 150) {
+      insights.push('A media de ingestao esta acima da meta ajustada com exercicio. Ajuste refeicoes para reduzir o excesso calorico.');
+    } else if (avgCalories < effectiveTarget - 150) {
+      insights.push('A ingestao media esta abaixo da meta ajustada com exercicio. Atencao para nao reduzir demais se houver desconforto.');
     } else {
       insights.push('A ingestao calorica media esta alinhada com a meta atual.');
     }
