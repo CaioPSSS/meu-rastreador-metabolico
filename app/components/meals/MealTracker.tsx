@@ -239,21 +239,25 @@ export default function MealTracker({
             <RefreshCw className="h-4 w-4 animate-spin" /> Carregando refeições...
           </div>
         ) : (
-          meals.map((meal) => (
-            <MealCard
-              key={meal.id}
-              meal={meal}
-              date={selectedDate}
-              onOpenAddFood={handleOpenAddFood}
-              onOpenQuickAdd={handleOpenQuickAdd}
-              onOpenVision={(m) => {
-                setActiveMealForVision(m);
-                setShowMealVision(true);
-              }}
-              onItemDeleted={handleMealsChanged}
-              onMealDeleted={handleMealsChanged}
-            />
-          ))
+          meals.map((meal) => {
+            const isDuplicate = meals.filter((m) => m.name.toLowerCase() === meal.name.toLowerCase()).length > 1;
+            return (
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                date={selectedDate}
+                isDuplicate={isDuplicate}
+                onOpenAddFood={handleOpenAddFood}
+                onOpenQuickAdd={handleOpenQuickAdd}
+                onOpenVision={(m) => {
+                  setActiveMealForVision(m);
+                  setShowMealVision(true);
+                }}
+                onItemDeleted={handleMealsChanged}
+                onMealDeleted={handleMealsChanged}
+              />
+            );
+          })
         )}
 
         {/* Botão de Adicionar Nova Refeição Customizada */}

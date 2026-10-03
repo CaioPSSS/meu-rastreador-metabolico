@@ -36,6 +36,7 @@ export interface MealData {
 interface MealCardProps {
   meal: MealData;
   date: string;
+  isDuplicate?: boolean;
   onOpenAddFood: (meal: MealData) => void;
   onOpenQuickAdd: (meal: MealData) => void;
   onOpenVision: (meal: MealData) => void;
@@ -45,6 +46,7 @@ interface MealCardProps {
 
 export default function MealCard({
   meal,
+  isDuplicate,
   onOpenAddFood,
   onOpenQuickAdd,
   onOpenVision,
@@ -193,8 +195,8 @@ export default function MealCard({
             <span>Alimento</span>
           </button>
 
-          {/* Opção de excluir refeição se for personalizada e vazia */}
-          {meal.items.length === 0 && meal.order >= 4 && (
+          {/* Opção de excluir refeição se for personalizada e vazia ou duplicada */}
+          {meal.items.length === 0 && (meal.order >= 4 || isDuplicate) && (
             <button
               type="button"
               onClick={handleDeleteMeal}

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { syncDailyLogFromMeals } from '@/lib/mealSync';
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_MEAL_NAMES = [
   'Café da Manhã',
   'Almoço',
@@ -28,21 +30,91 @@ export async function GET(request: NextRequest) {
       orderBy: { order: 'asc' },
     });
 
-    // Se o dia ainda não tiver refeições inicializadas, criar as 4 padrão
+    // Se o dia ainda não tiver refeições inicializadas, criar as 4 padrão com proteção contra concorrência
     if (meals.length === 0) {
-      const createdMeals = [];
       for (let i = 0; i < DEFAULT_MEAL_NAMES.length; i++) {
-        const m = await prisma.meal.create({
-          data: {
-            date,
-            name: DEFAULT_MEAL_NAMES[i],
-            order: i,
-          },
-          include: { items: true },
+        const name = DEFAULT_MEAL_NAMES[i];
+        const existing = await prisma.meal.findFirst({
+          where: { date, name },
         });
-        createdMeals.push(m);
+        if (!existing) {
+          try {
+            await prisma.meal.create({
+              data: {
+                date,
+                name,
+                order: i,
+              },
+            });
+          } catch (createErr) {
+            console.warn('[api/meals GET] Criação concorrente evitada para:', name, createErr);
+          }
+        }
       }
-      meals = createdMeals;
+
+      meals = await prisma.meal.findMany({
+        where: { date },
+        include: {
+          items: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { order: 'asc' },
+      });
+    }
+
+    // Auto-reparo de duplicatas (self-healing): se houver mais de uma refeição com o mesmo nome na data
+    const mealMap = new Map<string, typeof meals>();
+    for (const m of meals) {
+      const list = mealMap.get(m.name) || [];
+      list.push(m);
+      mealMap.set(m.name, list);
+    }
+
+    let hasDuplicates = false;
+    for (const [, duplicates] of mealMap.entries()) {
+      if (duplicates.length > 1) {
+        hasDuplicates = true;
+        // Ordena para manter a que tem itens (ou a mais antiga) como principal
+        duplicates.sort((a, b) => {
+          if (b.items.length !== a.items.length) {
+            return b.items.length - a.items.length;
+          }
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+
+        const primary = duplicates[0];
+        const redundant = duplicates.slice(1);
+
+        for (const red of redundant) {
+          // Se a duplicata redundante tiver itens, migra para a refeição principal
+          if (red.items.length > 0) {
+            await prisma.mealItem.updateMany({
+              where: { mealId: red.id },
+              data: { mealId: primary.id },
+            });
+          }
+          // Deleta a refeição duplicada
+          await prisma.meal.delete({
+            where: { id: red.id },
+          });
+        }
+      }
+    }
+
+    if (hasDuplicates) {
+      // Recarrega a lista de refeições limpas
+      meals = await prisma.meal.findMany({
+        where: { date },
+        include: {
+          items: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { order: 'asc' },
+      });
+      // Sincroniza o DailyLog caso itens tenham sido consolidados
+      await syncDailyLogFromMeals(date);
     }
 
     // Calcular somatórios
