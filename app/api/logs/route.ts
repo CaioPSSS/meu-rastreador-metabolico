@@ -32,14 +32,14 @@ export async function POST(request: Request) {
   await prisma.dailyLog.upsert({
     where: { date },
     update: {
-      weight: weight !== undefined && weight !== '' ? Number(weight) : undefined,
-      caloriesBurned: caloriesBurned !== undefined && caloriesBurned !== '' ? Number(caloriesBurned) : undefined,
-      trainingType: trainingType || undefined,
-      sleepHours: sleepHours !== undefined && sleepHours !== '' ? Number(sleepHours) : undefined,
-      waterIntake: waterIntake !== undefined && waterIntake !== '' ? Number(waterIntake) : undefined,
-      stressLevel: stressLevel !== undefined && stressLevel !== '' ? Number(stressLevel) : undefined,
-      mood: mood !== undefined && mood !== '' ? mood : undefined,
-      waistCircumference: waistCircumference !== undefined && waistCircumference !== '' ? Number(waistCircumference) : undefined,
+      weight: weight ? Number(weight) : null,
+      caloriesBurned: caloriesBurned ? Number(caloriesBurned) : null,
+      trainingType: trainingType || 'Descanso',
+      sleepHours: sleepHours ? Number(sleepHours) : null,
+      waterIntake: waterIntake ? Number(waterIntake) : null,
+      stressLevel: stressLevel ? Number(stressLevel) : null,
+      mood: mood || null,
+      waistCircumference: waistCircumference ? Number(waistCircumference) : null,
     },
     create: {
       date,
