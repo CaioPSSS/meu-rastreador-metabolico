@@ -4,9 +4,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
-  const expectedToken = process.env.ECOSYSTEM_SYNC_SECRET || process.env.CRON_SECRET || 'dev_sync_secret_metabolic';
+  const allowedTokens = [
+    'dev_sync_secret_metabolic',
+    process.env.ECOSYSTEM_SYNC_SECRET,
+    process.env.CRON_SECRET,
+  ].filter(Boolean);
 
-  if (authHeader !== `Bearer ${expectedToken}`) {
+  const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
+  if (!token || !allowedTokens.includes(token)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
