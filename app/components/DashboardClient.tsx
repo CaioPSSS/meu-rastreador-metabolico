@@ -214,6 +214,33 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [syncedLogDate, setSyncedLogDate] = useState<string | null>(null);
+
+  // Sincroniza logForm com o registro do dia existente (ex: vindo do Personal Trainer ou salvo anteriormente)
+  useEffect(() => {
+    if (isEditing) return;
+    const targetDate = logForm.date || getLocalISODate();
+    if (syncedLogDate === targetDate) return;
+
+    const dayLog = logs.find((l) => l.date === targetDate);
+    if (dayLog) {
+      setLogForm({
+        date: dayLog.date,
+        weight: dayLog.weight?.toString() || '',
+        caloriesBurned: dayLog.caloriesBurned?.toString() || '',
+        trainingType: dayLog.trainingType || 'Descanso',
+        sleepHours: dayLog.sleepHours?.toString() || '',
+        waterIntake: dayLog.waterIntake?.toString() || '',
+        stressLevel: dayLog.stressLevel?.toString() || '3',
+        mood: dayLog.mood || 'Regular',
+        waistCircumference: dayLog.waistCircumference?.toString() || '',
+      });
+      setSyncedLogDate(targetDate);
+    } else {
+      setSyncedLogDate(targetDate);
+    }
+  }, [logs, logForm.date, isEditing, syncedLogDate]);
+
   useEffect(() => {
     const loadUnreadReport = async () => {
       try {
@@ -288,6 +315,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
   };
 
   const resetLogForm = () => {
+    setSyncedLogDate(null);
     setLogForm({ ...initialLogForm, date: getLocalISODate() });
     setIsEditing(false);
     setClientMessage({ type: '', text: '' });
@@ -325,6 +353,7 @@ export default function DashboardClient({ initialSettings, initialLogs, initialI
 
     try {
       await addLog(logForm);
+      setSyncedLogDate(null);
       setClientMessage({
         type: 'success',
         text: isEditing ? 'Registro atualizado com sucesso.' : 'Dados computados com sucesso! O algoritmo recalculou seu progresso.',

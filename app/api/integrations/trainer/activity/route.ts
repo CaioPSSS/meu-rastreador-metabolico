@@ -32,10 +32,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body: ActivitySyncPayload = await request.json();
-    const { date, caloriesBurned, trainingType, sleepHours, bodyWeightKg, stressLevel } = body;
+    let { date, caloriesBurned, trainingType, sleepHours, bodyWeightKg, stressLevel } = body;
 
     if (!date) {
       return NextResponse.json({ error: 'Campo date é obrigatório (YYYY-MM-DD)' }, { status: 400 });
+    }
+
+    if (trainingType === 'Cross-Training') {
+      trainingType = 'Híbrido';
     }
 
     // 2. Upsert atômico no DailyLog preservando registros existentes
